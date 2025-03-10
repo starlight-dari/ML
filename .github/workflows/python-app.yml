@@ -2,9 +2,9 @@ name: Python CI with Flask
 
 on:
   push:
-    branches: [ "develop" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "develop" ]
+    branches: [ "main" ]
 
 permissions:
   contents: read
