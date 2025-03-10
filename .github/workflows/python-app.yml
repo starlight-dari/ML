@@ -32,12 +32,6 @@ jobs:
         python -m venv venv
         source venv/bin/activate
         pip install --upgrade pip
-        pip install -r requirements.txt
-
-    # 3. 애플리케이션 테스트
-    # - name: Run tests
-    #   run: |
-    #     source venv/bin/activates
     
     # 4. Docker 이미지 빌드 & Push
     - name: Docker Image Build & Push
