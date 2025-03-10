@@ -47,10 +47,10 @@ jobs:
 
     steps:
     # 1. 최신 이미지 Pull
-    - name: Pull latest Docker image
-      run: |
-        docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
-        sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
+    # - name: Pull latest Docker image
+    #   run: |
+    #     docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
+    #     sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
     
     # 2. 기존 컨테이너 중지
     - name: Stop running container
@@ -58,7 +58,7 @@ jobs:
     
     # 3. 최신 이미지 실행
     - name: Run new container
-      run: sudo docker run --rm -d -p 8080:8080 ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
+      run: sudo docker run --rm -d -p 5000:5000 ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
     
     # 4. 기존 이미지 정리
     - name: Clean up old Docker images
