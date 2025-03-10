@@ -54,7 +54,7 @@ jobs:
     
     # 2. 기존 컨테이너 중지
     - name: Stop running container
-      run: sudo docker stop $(docker ps -q) 2>/dev/null || true
+      run: sudo docker stop $(sudo docker ps -q) 2>/dev/null || true
 
     # 3. 최신 이미지 실행
     - name: Run new container
