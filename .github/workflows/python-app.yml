@@ -54,12 +54,18 @@ jobs:
     
     # 2. 기존 컨테이너 중지
     - name: Stop running container
-      run: sudo docker stop $(docker ps -q) 2>/dev/null || true
-    
+      run: |
+        RUNNING_CONTAINERS=$(docker ps -q)
+        if [ ! -z "$RUNNING_CONTAINERS" ]; then
+          sudo docker stop $RUNNING_CONTAINERS
+        fi
+
     # 3. 최신 이미지 실행
     - name: Run new container
-      run: sudo docker run --rm -d -p 5000:5000 ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
+      run: sudo docker run -d -p 5000:5000 --name api_ml_cicd ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
     
     # 4. 기존 이미지 정리
     - name: Clean up old Docker images
-      run: sudo docker system prune -f
+      run: |
+        sudo docker image prune -f --filter "dangling=true"
+
