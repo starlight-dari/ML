@@ -19,8 +19,6 @@ COPY download_and_run.sh /app/download_and_run.sh
 RUN chmod +x /app/download_and_run.sh
 
 # 컨테이너 실행 시 스크립트 실행
-CMD ["/app/download_and_run.sh"]
+CMD ["/bin/bash", "-c", "/app/download_and_run.sh && python api_ml.py"]
 
-# 5. 실행할 기본 명령어 설정
-CMD ["python", "api_ml.py"]
 
