@@ -54,11 +54,9 @@ jobs:
     
     # 2. 기존 컨테이너 중지
     - name: Stop running container (if exists)
-      run: |
-        if [ "$(sudo docker ps -q -f name=api_ml_cicd)" ]; then
+      run: 
           sudo docker stop api_ml_cicd
           sudo docker rm api_ml_cicd
-        fi
 
     # 3. 최신 이미지 실행
     - name: Run new container
