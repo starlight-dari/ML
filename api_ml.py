@@ -67,12 +67,12 @@ def load_json_data(file_path):
 funeral_data = load_json_data(FUNERAL_JSON_PATH)
 
 # Pidinet
-sam_checkpoint = "./sam_vit_b_01ec64.pth"  # SAM checkpoint 파일 경로
-model_type = "vit_b"
-state_dict = torch.load(sam_checkpoint, weights_only=True)
-sam = sam_model_registry[model_type](checkpoint=None)  # Load without unsafe data
-sam.load_state_dict(state_dict)
-predictor = SamPredictor(sam)
+# sam_checkpoint = "./sam_vit_b_01ec64.pth"  # SAM checkpoint 파일 경로
+# model_type = "vit_b"
+# state_dict = torch.load(sam_checkpoint, weights_only=True)
+# sam = sam_model_registry[model_type](checkpoint=None)  # Load without unsafe data
+# sam.load_state_dict(state_dict)
+# predictor = SamPredictor(sam)
 
 # Pinecone 초기화
 pc = Pinecone(api_key=PINECONE_API_KEY)
