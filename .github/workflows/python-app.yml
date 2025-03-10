@@ -1,0 +1,48 @@
+name: Python CI with Flask
+
+on:
+  push:
+    branches: [ "develop" ]
+  pull_request:
+    branches: [ "develop" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-docker-image:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    # 0. 환경 변수 설정 파일 적용
+    - name: Set up environment variables
+      run: echo "${{ secrets.FLASK_ENV_FILE }}" > .env
+
+    # 1. Python 3.10 설정
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    # 2. 가상 환경 생성 및 의존성 설치
+    - name: Install dependencies
+      run: |
+        python -m venv venv
+        source venv/bin/activate
+        pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # 3. 애플리케이션 테스트 (pytest 사용 가능)
+    - name: Run tests
+      run: |
+        source venv/bin/activate
+        pytest
+    
+    # 4. Docker 이미지 빌드 & Push
+    - name: Docker Image Build & Push
+      run: |
+        docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
+        docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd .
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
