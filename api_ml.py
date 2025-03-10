@@ -66,13 +66,19 @@ def load_json_data(file_path):
         return []
 funeral_data = load_json_data(FUNERAL_JSON_PATH)
 
+training_status = {"status": "idle"}
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # Pidinet
-# sam_checkpoint = "./sam_vit_b_01ec64.pth"  # SAM checkpoint 파일 경로
-# model_type = "vit_b"
-# state_dict = torch.load(sam_checkpoint, weights_only=True)
-# sam = sam_model_registry[model_type](checkpoint=None)  # Load without unsafe data
-# sam.load_state_dict(state_dict)
-# predictor = SamPredictor(sam)
+sam_checkpoint = "./sam_vit_b_01ec64.pth"  # SAM checkpoint 파일 경로
+# 모델 파일 경로 검증 (파일이 실제 존재하는지 확인)
+if not os.path.isfile(sam_checkpoint):
+    raise FileNotFoundError(f"Model checkpoint file '{sam_checkpoint}' not found.")
+model_type = "vit_b"
+state_dict = torch.load(sam_checkpoint, weights_only=True)
+sam = sam_model_registry[model_type](checkpoint=None)  # Load without unsafe data
+sam.load_state_dict(state_dict)
+predictor = SamPredictor(sam)
 
 # Pinecone 초기화
 pc = Pinecone(api_key=PINECONE_API_KEY)
@@ -81,9 +87,6 @@ index_meritz = pc.Index("meritz")
 index_samsung = pc.Index("samsung")
 index_hanhwa = pc.Index("hanwha")
 index_diagnostic = pc.Index("diagnostic")
-
-training_status = {"status": "idle"}
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 app = Flask(__name__)
 
