@@ -19,7 +19,7 @@ jobs:
     
     # 0. 환경 변수 설정 파일 적용
     - name: Set up environment variables
-      run: echo "${{ secrets.FLASK_ENV_FILE }}" > .env
+      run: echo "${{ secrets.ENV_FILE }}" > .env
 
     # 1. Python 3.10 설정
     - name: Set up Python 3.10
