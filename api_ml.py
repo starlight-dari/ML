@@ -821,9 +821,9 @@ def run_pidinet():
     # 단일 문자열이면 리스트로 변환
     if isinstance(image_url, str):
         image_url = [image_url]
-
-    stars_download_s3_images(image_urls=image_url, save_folder="./img")
-
+        
+    stars_download_s3_images(image_urls = image_url, save_folder="./img")
+    
     # 🔹 Step 3: PiDiNet 실행 명령어
     command = [
         "python", "pidinet-master/main.py",
@@ -842,47 +842,17 @@ def run_pidinet():
 
     try:
         print("🚀 PiDiNet 실행 중...")
+        result = subprocess.run(command, check=True)  # 실행 (완료될 때까지 대기)
+        print("✅ PiDiNet 실행 완료!")
 
-        # 🔹 FutureWarning 방지 및 state_dict 오류 해결
-        import torch
-        from collections import OrderedDict
+        return jsonify({
+            "message": "PiDiNet execution completed",
+        }), 200
 
-        def remove_module_prefix(state_dict):
-            new_state_dict = OrderedDict()
-            for k, v in state_dict.items():
-                new_key = k.replace("module.", "")  # "module." 제거
-                new_state_dict[new_key] = v
-            return new_state_dict
+    except subprocess.CalledProcessError as e:
+        print(f"❌ PiDiNet 실행 실패: {e}")
+        return jsonify({"error": "PiDiNet execution failed"}), 500
 
-        checkpoint = torch.load("./table5_pidinet.pth", map_location="cpu", weights_only=True)
-        clean_state_dict = remove_module_prefix(checkpoint["state_dict"])
-
-        # 변경된 state_dict로 모델 실행 (PiDiNet 내부 코드 수정 필요)
-        torch.save({"state_dict": clean_state_dict}, "./table5_pidinet_clean.pth")
-
-        # PiDiNet 실행 (실시간 로그 출력)
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-
-        stdout_output, stderr_output = process.communicate()
-
-        if process.returncode != 0:
-            print(f"❌ PiDiNet 실행 실패: {stderr_output}")
-            return jsonify({
-                "error": "PiDiNet execution failed",
-                "details": stderr_output
-            }), 500
-
-        print(f"✅ PiDiNet 실행 완료!\n{stdout_output}")
-        return jsonify({"message": "PiDiNet execution completed"}), 200
-
-    except Exception as e:
-        print(f"❌ PiDiNet 실행 중 예외 발생: {e}")
-        return jsonify({"error": "Unexpected error occurred", "details": str(e)}), 500
 
 @app.route("/stars_process_image", methods=["POST"])
 def process_image():
