@@ -69,7 +69,7 @@ funeral_data = load_json_data(FUNERAL_JSON_PATH)
 training_status = {"status": "idle"}
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# SAM
+# Pidinet
 sam_checkpoint = "./sam_vit_b_01ec64.pth"  # SAM checkpoint 파일 경로
 # 모델 파일 경로 검증 (파일이 실제 존재하는지 확인)
 if not os.path.isfile(sam_checkpoint):
@@ -757,6 +757,54 @@ def enhance_contrast(image):
     enhanced = clahe.apply(gray)
     return enhanced
 
+# @app.route("/stars_run_pidinet", methods=["POST"])
+# def run_pidinet():
+#     """
+#     클라이언트로부터 이미지 리스트를 받아 PiDiNet 실행.
+#     """
+#     data = request.json
+#     print(f"📥 Received Data: {data}")  # Debugging log
+
+#     image_url = data.get("image_url")
+
+#     if not image_url:
+#         return jsonify({"error": "No images provided"}), 400
+
+#     # 단일 문자열이면 리스트로 변환
+#     if isinstance(image_url, str):
+#         image_url = [image_url]
+        
+#     stars_download_s3_images(image_urls = image_url, save_folder="./img")
+    
+#     # 🔹 Step 3: PiDiNet 실행 명령어
+#     command = [
+#         "python", "pidinet-master/main.py",
+#         "--model", "pidinet_converted",
+#         "--config", "carv4",
+#         "--sa", "--dil",
+#         "-j", "4",
+#         "--gpu", "0",
+#         "--resume",
+#         "--savedir", "./img_edges",
+#         "--datadir", "./img",
+#         "--dataset", "Custom",
+#         "--evaluate", "./table5_pidinet.pth",
+#         "--evaluate-converted"
+#     ]
+
+#     try:
+#         print("🚀 PiDiNet 실행 중...")
+#         result = subprocess.run(command, check=True)  # 실행 (완료될 때까지 대기)
+#         print("✅ PiDiNet 실행 완료!")
+
+#         return jsonify({
+#             "message": "PiDiNet execution completed",
+#         }), 200
+
+#     except subprocess.CalledProcessError as e:
+#         print(f"❌ PiDiNet 실행 실패: {e}")
+#         return jsonify({"error": "PiDiNet execution failed"}), 500
+
 @app.route("/stars_run_pidinet", methods=["POST"])
 def run_pidinet():
     """
@@ -783,7 +831,7 @@ def run_pidinet():
         "--config", "carv4",
         "--sa", "--dil",
         "-j", "4",
-        "--gpu", "0",
+        "--gpu", "-1",
         "--resume",
         "--savedir", "./img_edges",
         "--datadir", "./img",
@@ -835,7 +883,7 @@ def run_pidinet():
     except Exception as e:
         print(f"❌ PiDiNet 실행 중 예외 발생: {e}")
         return jsonify({"error": "Unexpected error occurred", "details": str(e)}), 500
-    
+
 @app.route("/stars_process_image", methods=["POST"])
 def process_image():
     """
