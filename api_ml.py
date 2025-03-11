@@ -69,7 +69,7 @@ funeral_data = load_json_data(FUNERAL_JSON_PATH)
 training_status = {"status": "idle"}
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Pidinet
+# SAM
 sam_checkpoint = "./sam_vit_b_01ec64.pth"  # SAM checkpoint 파일 경로
 # 모델 파일 경로 검증 (파일이 실제 존재하는지 확인)
 if not os.path.isfile(sam_checkpoint):
@@ -794,7 +794,7 @@ def run_pidinet():
 
     try:
         print("🚀 PiDiNet 실행 중...")
-        
+
         # PiDiNet 실행 (실시간 로그 출력)
         process = subprocess.Popen(
             command,
@@ -802,28 +802,23 @@ def run_pidinet():
             stderr=subprocess.PIPE,
             text=True
         )
-        
-        # 로그 실시간 출력
-        for line in process.stdout:
-            print(line.strip())
-        
-        # 프로세스 종료 대기 및 결과 확인
-        process.wait()
 
+        stdout_output, stderr_output = process.communicate()
+        
         if process.returncode != 0:
-            error_message = process.stderr.read()
-            print(f"❌ PiDiNet 실행 실패: {error_message}")
-            return jsonify({"error": "PiDiNet execution failed", "details": error_message}), 500
+            print(f"❌ PiDiNet 실행 실패: {stderr_output}")
+            return jsonify({
+                "error": "PiDiNet execution failed",
+                "details": stderr_output
+            }), 500
 
-        print("✅ PiDiNet 실행 완료!")
-        return jsonify({
-            "message": "PiDiNet execution completed",
-        }), 200
+        print(f"✅ PiDiNet 실행 완료!\n{stdout_output}")
+        return jsonify({"message": "PiDiNet execution completed"}), 200
 
     except Exception as e:
         print(f"❌ PiDiNet 실행 중 예외 발생: {e}")
         return jsonify({"error": "Unexpected error occurred", "details": str(e)}), 500
-
+    
 @app.route("/stars_process_image", methods=["POST"])
 def process_image():
     """
