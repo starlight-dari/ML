@@ -11,6 +11,7 @@ OUTPUT_FILE2="table5_pidinet.pth"
 if [ ! -f "$OUTPUT_FILE" ]; then
     echo "Downloading model checkpoint from Google Drive..."
     gdown --id $FILE_ID -O $OUTPUT_FILE
+if [ ! -f "$OUTPUT_FILE2" ]; then
     gdown --id $FILE_ID2 -O $OUTPUT_FILE2
 else
     echo "Model checkpoint already exists. Skipping download."
