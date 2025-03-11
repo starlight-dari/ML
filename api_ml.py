@@ -774,7 +774,7 @@ def run_pidinet():
     if isinstance(image_url, str):
         image_url = [image_url]
         
-    stars_download_s3_images(image_urls = image_url, save_folder="./img")
+    stars_download_s3_images(image_urls=image_url, save_folder="./img")
     
     # 🔹 Step 3: PiDiNet 실행 명령어
     command = [
@@ -794,16 +794,35 @@ def run_pidinet():
 
     try:
         print("🚀 PiDiNet 실행 중...")
-        result = subprocess.run(command, check=True)  # 실행 (완료될 때까지 대기)
-        print("✅ PiDiNet 실행 완료!")
+        
+        # PiDiNet 실행 (실시간 로그 출력)
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # 로그 실시간 출력
+        for line in process.stdout:
+            print(line.strip())
+        
+        # 프로세스 종료 대기 및 결과 확인
+        process.wait()
 
+        if process.returncode != 0:
+            error_message = process.stderr.read()
+            print(f"❌ PiDiNet 실행 실패: {error_message}")
+            return jsonify({"error": "PiDiNet execution failed", "details": error_message}), 500
+
+        print("✅ PiDiNet 실행 완료!")
         return jsonify({
             "message": "PiDiNet execution completed",
         }), 200
 
-    except subprocess.CalledProcessError as e:
-        print(f"❌ PiDiNet 실행 실패: {e}")
-        return jsonify({"error": "PiDiNet execution failed"}), 500
+    except Exception as e:
+        print(f"❌ PiDiNet 실행 중 예외 발생: {e}")
+        return jsonify({"error": "Unexpected error occurred", "details": str(e)}), 500
 
 @app.route("/stars_process_image", methods=["POST"])
 def process_image():
