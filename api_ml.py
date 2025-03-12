@@ -831,7 +831,7 @@ def run_pidinet():
         "--config", "carv4",
         "--sa", "--dil",
         "-j", "4",
-        "--gpu", "-1",
+        "--gpu", "0",
         "--resume",
         "--savedir", "./img_edges",
         "--datadir", "./img",
