@@ -19,6 +19,12 @@ COPY download_and_run.sh /app/download_and_run.sh
 RUN chmod +x /app/download_and_run.sh
 
 # 컨테이너 실행 시 스크립트 실행
-CMD ["/bin/bash", "-c", "/app/download_and_run.sh && python api_ml.py"]
+CMD ["/bin/bash", "-c", "
+    chmod +x /app/download_and_run.sh && \
+    chmod +x /app/train_dreambooth.py && \
+    /app/download_and_run.sh && \
+    python api_ml.py
+"]
+
 
 
