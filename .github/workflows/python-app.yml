@@ -40,9 +40,9 @@ jobs:
   #       docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd .
   #       docker push ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
 
-  # run-docker-image-on-ec2:
-  #   needs: build-docker-image
-  #   runs-on: self-hosted
+  run-docker-image-on-ec2:
+    needs: build-docker-image
+    runs-on: self-hosted
 
   #   steps:
   #   # 1. 최신 이미지 Pull
