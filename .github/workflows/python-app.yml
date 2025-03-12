@@ -44,7 +44,7 @@ jobs:
     needs: build-docker-image
     runs-on: self-hosted
 
-  #   steps:
+    steps:
   #   # 1. 최신 이미지 Pull
   #   - name: Pull latest Docker image
   #     run: |
