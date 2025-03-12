@@ -26,42 +26,42 @@ jobs:
       with:
         python-version: '3.10'
 
-    # # 2. 가상 환경 생성 및 의존성 설치
-    # - name: Install dependencies
-    #   run: |
-    #     python -m venv venv
-    #     source venv/bin/activate
-    #     pip install --upgrade pip
+    # 2. 가상 환경 생성 및 의존성 설치
+    - name: Install dependencies
+      run: |
+        python -m venv venv
+        source venv/bin/activate
+        pip install --upgrade pip
     
-    # # # 4. Docker 이미지 빌드 & Push
-    # - name: Docker Image Build & Push
-    #   run: |
-    #     docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
-    #     docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd .
-    #     docker push ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
+    # # 4. Docker 이미지 빌드 & Push
+    - name: Docker Image Build & Push
+      run: |
+        docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
+        docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd .
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
 
   run-docker-image-on-ec2:
     needs: build-docker-image
     runs-on: self-hosted
 
     steps:
-    # # 1. 최신 이미지 Pull
-    # - name: Pull latest Docker image
-    #   run: |
-    #     docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
-    #     sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
+    # 1. 최신 이미지 Pull
+    - name: Pull latest Docker image
+      run: |
+        docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
+        sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
     
-    # # 2. 기존 컨테이너 중지
-    # - name: Stop running container (if exists)
-    #   run: |
-    #     if [ "$(sudo docker ps -a)" ]; then
-    #       sudo docker stop api_ml_cicd
-    #       sudo docker rm api_ml_cicd
-    #     fi
+    # 2. 기존 컨테이너 중지
+    - name: Stop running container (if exists)
+      run: |
+        if [ "$(sudo docker ps -a)" ]; then
+          sudo docker stop api_ml_cicd
+          sudo docker rm api_ml_cicd
+        fi
 
     # 3. 최신 이미지 실행
     - name: Run new container
-      run: sudo docker run -d -p 5000:5000 --name api_ml_cicd ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
+      run: sudo docker run --gpus all -d -p 5000:5000 --name api_ml_cicd ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
     
     # 4. 기존 이미지 정리
     - name: Clean up old Docker images
