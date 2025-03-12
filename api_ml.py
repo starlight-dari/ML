@@ -369,7 +369,7 @@ def train_dreambooth():
 
     # 🔹 Step 3: Start training only if all images are available
     command = [
-        "accelerate", "launch", "--num_cpu_threads_per_process=1", TRAIN_SCRIPT,
+        TRAIN_SCRIPT,
         "--pretrained_model_name_or_path=runwayml/stable-diffusion-v1-5",
         "--instance_data_dir=./train_images",
         "--output_dir=./dreambooth_output",
