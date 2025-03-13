@@ -369,7 +369,8 @@ def train_dreambooth():
 
     # 🔹 Step 3: Start training only if all images are available
     command = [
-        "accelerate", "launch", "--num_cpu_threads_per_process=1", TRAIN_SCRIPT,
+        # "accelerate", "launch", "--num_cpu_threads_per_process=1", 
+        TRAIN_SCRIPT,
         "--pretrained_model_name_or_path=runwayml/stable-diffusion-v1-5",
         "--instance_data_dir=./train_images",
         "--output_dir=./dreambooth_output",
@@ -383,7 +384,9 @@ def train_dreambooth():
         "--lr_scheduler=constant",
         "--lr_warmup_steps=0",
         "--max_train_steps=700",
-        "--checkpointing_steps=700"
+        "--checkpointing_steps=700",
+        "--enable_xformers_memory_efficient_attention",
+        "--use_8bit_adam",  # 8bit Adam 옵티마이저 사용
     ]
 
     try:
@@ -438,15 +441,19 @@ def generate_images():
     pipeline.load_lora_weights(lora_path)
 
     # 이미지 생성
-    guidance_scales = [5, 6, 7, 8, 9, 10]
-    inference_steps = [100]
-    generated_images = []
-    
-    for scale in guidance_scales:
-        for step in inference_steps:
-            with torch.autocast(device.type):
-                result = pipeline(dreambooth_prompt, num_inference_steps=step, guidance_scale=scale)
-            generated_images.append(result.images[0])
+    max_guidance_scale = max([5, 6, 7, 8, 9, 10])  # 가장 큰 값 사용
+    num_images = 6  # 한 번에 6장 생성
+    inference_steps = 100  # 고정된 스텝 수
+
+    with torch.autocast(device.type):
+        result = pipeline(
+            dreambooth_prompt,
+            num_inference_steps=inference_steps,
+            guidance_scale=max_guidance_scale,
+            num_images_per_prompt=num_images  # 한 번에 6장 생성
+        )
+
+    generated_images = result.images  # 6장의 이미지 리스트
 
     # 최종 이미지 6장 선택
     encoded_images = []
