@@ -19,11 +19,7 @@ COPY download_and_run.sh /app/download_and_run.sh
 RUN chmod +x /app/train_dreambooth.py /app/download_and_run.sh
 
 # 6. 컨테이너 실행 시 수행할 명령
-CMD ["/bin/bash", "-c", "
-    /app/download_and_run.sh && \
-    pip install --no-cache-dir git+https://github.com/huggingface/diffusers.git && \
-    python api_ml.py
-"]
+CMD ["/bin/bash", "-c", "/app/download_and_run.sh && pip install --no-cache-dir git+https://github.com/huggingface/diffusers.git && python api_ml.py"]
 
 
 
