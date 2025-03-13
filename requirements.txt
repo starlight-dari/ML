@@ -16,6 +16,7 @@ openai>=1.65.4
 opencv-python>=4.10.0.84
 Pillow>=9.5.0
 pinecone>=5.4.2
+peft
 requests>=2.32.3
 scikit-learn>=1.3.2
 scikit-image==0.21.0

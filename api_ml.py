@@ -21,6 +21,7 @@ from sklearn.cluster import KMeans
 from sklearn.neighbors import kneighbors_graph
 from scipy.sparse.csgraph import minimum_spanning_tree, connected_components
 from sklearn.metrics import pairwise_distances
+from peft import PeftModel
 
 # Pinecone & OpenAI
 import pinecone
@@ -364,12 +365,9 @@ def train_dreambooth():
     if not image_urls:
         return jsonify({"error": "No images provided"}), 400
 
-    # 🔹 Step 1: Download images from S3
     downloaded_images = download_s3_images(image_urls, "./train_images")
 
-    # 🔹 Step 3: Start training only if all images are available
     command = [
-        # "accelerate", "launch", "--num_cpu_threads_per_process=1", 
         TRAIN_SCRIPT,
         "--pretrained_model_name_or_path=runwayml/stable-diffusion-v1-5",
         "--instance_data_dir=./train_images",
@@ -386,17 +384,26 @@ def train_dreambooth():
         "--max_train_steps=700",
         "--checkpointing_steps=700",
         "--enable_xformers_memory_efficient_attention",
-        "--use_8bit_adam",  # 8bit Adam 옵티마이저 사용
+        "--use_8bit_adam",
     ]
 
-    try:
-        print("🚀 All images downloaded. Starting training...")
-        subprocess.run(command, check=True)  # 🔹 This blocks until training completes
-        print("✅ Training completed successfully!")
-        return jsonify({"message": "Training completed"}), 200
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Training failed: {e}")
-        return jsonify({"error": "Training failed"}), 500
+    def run_training():
+        global training_status
+        training_status["status"] = "running"
+        try:
+            print("🚀 Training started in background...")
+            subprocess.run(command, check=True)
+            print("✅ Training completed successfully!")
+            training_status["status"] = "completed"
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Training failed: {e}")
+            training_status["status"] = "failed"
+
+    # 새로운 쓰레드에서 훈련 실행 (비동기 처리)
+    training_thread = threading.Thread(target=run_training)
+    training_thread.start()
+
+    return jsonify({"message": "Training started"}), 202  # 202 Accepted: 비동기 요청
 
 @app.route('/training_status', methods=['GET'])
 def get_training_status():
