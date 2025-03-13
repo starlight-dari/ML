@@ -4,7 +4,7 @@ bitsandbytes
 botocore>=1.37.9
 cairosvg>=2.7.1
 cairocffi>=1.6.1
-diffusers
+# diffusers
 flask>=3.0.3
 huggingface_hub>=0.22.2
 langchain>=0.2.17
