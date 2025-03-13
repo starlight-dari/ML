@@ -1,9 +1,10 @@
 accelerate
 boto3>=1.36.24
+bitsandbytes
 botocore>=1.37.9
 cairosvg>=2.7.1
 cairocffi>=1.6.1
-diffusers>=0.27.2
+diffusers>= 0.33.0
 flask>=3.0.3
 huggingface_hub>=0.22.2
 langchain>=0.2.17
@@ -28,3 +29,4 @@ ffmpeg-python>=0.2.0
 PyQt5>=5.15.9  # (or PyQt6/PySide2/PySide6, depending on GUI needs)
 python-dotenv
 scikit-image
+xformers
