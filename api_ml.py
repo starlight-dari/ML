@@ -181,6 +181,32 @@ def upload_svg_to_s3(bucket_name, object_name=None):
         print(f"파일 업로드 실패: {e}")
         return None
 
+def upload_png_to_s3(bucket_name, object_name=None):
+    """
+    .png 파일을 S3에 업로드하고 URL을 반환하는 함수
+    :param file_path: 로컬 파일 경로
+    :param bucket_name: S3 버킷 이름
+    :param object_name: S3에 저장할 파일 이름 (기본적으로 로컬 파일 이름과 동일)
+    :return: 업로드된 파일의 S3 URL
+    """
+
+    try:
+        s3_client.upload_file(
+            Filename=object_name,
+            Bucket=bucket_name, 
+            Key=f"test_user/{object_name}",
+            ExtraArgs={'ContentType': 'image/png'}  # 올바른 SVG MIME 타입
+        )
+        
+        # 업로드된 파일의 URL 생성
+        file_url = f"https://{bucket_name}.s3.amazonaws.com/test_user/{object_name}"
+        return file_url
+
+    except Exception as e:
+        print(f"파일 업로드 실패: {e}")
+        return None
+
+
 ############################
 ######### api_rag ##########
 ############################
@@ -473,7 +499,7 @@ def generate_images():
 
         # S3 업로드
         # object_name = f"generated_image_{idx}.png"
-        file_url = upload_svg_to_s3(BUCKET_NAME, local_path)  # 로컬 파일 경로 사용
+        file_url = upload_png_to_s3(BUCKET_NAME, local_path)  # 로컬 파일 경로 사용
 
         if file_url:
             encoded_images.append(file_url)
