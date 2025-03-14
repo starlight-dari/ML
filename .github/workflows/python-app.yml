@@ -58,8 +58,7 @@ jobs:
     #       sudo docker stop api_ml_cicd
     #       sudo docker rm api_ml_cicd
     #     fi
-  
-  
+
     # 3. 최신 이미지 실행
     - name: Run new container
       run: sudo docker run --gpus all -d -p 5000:5000 --name api_ml_cicd ${{ secrets.DOCKERHUB_USERNAME }}/api_ml_cicd
