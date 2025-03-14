@@ -170,7 +170,7 @@ def upload_svg_to_s3(bucket_name, object_name=None):
             Filename=object_name,
             Bucket=bucket_name, 
             Key=f"test_user/{object_name}",
-            ExtraArgs={'ContentType': 'image/png'}  # MIME 타입 지정
+            ExtraArgs={'ContentType': 'image/svg+xml'}  # 올바른 SVG MIME 타입
         )
         
         # 업로드된 파일의 URL 생성
