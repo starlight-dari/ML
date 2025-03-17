@@ -381,8 +381,7 @@ def train_dreambooth():
 
         image_urls *= 2  # 데이터 증강
         
-        if not download_s3_images(image_urls, "./train_images"):
-            return jsonify({"error": "Failed to download images"}), 500
+        downloaded_images = download_s3_images(image_urls, "./train_images")
 
         command = [
             TRAIN_SCRIPT,
