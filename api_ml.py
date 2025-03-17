@@ -484,15 +484,10 @@ def generate_images():
 
     generated_images = []  # 생성된 이미지 저장 리스트
 
-    for _ in range(num_images):
+    for step in inference_steps:
         with torch.autocast(device.type):
-            result = pipeline(
-                dreambooth_prompt,
-                num_inference_steps=inference_steps,
-                guidance_scale=max_guidance_scale,
-                num_images_per_prompt=1  # 한 번에 1장 생성
-            )
-            generated_images.append(result.images[0])  # 생성된 이미지를 리스트에 추가
+            result = pipeline(dreambooth_prompt, num_inference_steps=step, guidance_scale=max_guidance_scale)
+        generated_images.append(result.images[0])
 
     # 최종 이미지 6장 선택
     encoded_images = []
@@ -595,20 +590,15 @@ def generate_images_random():
 
     # 이미지 생성
     max_guidance_scale = max([5, 6, 7, 8, 9, 10])  # 가장 큰 값 사용
-    num_images = 6  # 한 번에 6장 생성
+    num_images = 6  # 생성할 이미지 수
     inference_steps = 100  # 고정된 스텝 수
 
     generated_images = []  # 생성된 이미지 저장 리스트
 
-    for _ in range(num_images):
+    for step in inference_steps:
         with torch.autocast(device.type):
-            result = pipeline(
-                dreambooth_prompt,
-                num_inference_steps=inference_steps,
-                guidance_scale=max_guidance_scale,
-                num_images_per_prompt=1  # 한 번에 1장 생성
-            )
-            generated_images.append(result.images[0])  # 생성된 이미지를 리스트에 추가
+            result = pipeline(dreambooth_prompt, num_inference_steps=step, guidance_scale=max_guidance_scale)
+        generated_images.append(result.images[0])
 
     # 최종 이미지 6장 선택
     encoded_images = []
@@ -677,20 +667,15 @@ def generate_images_birth_death():
 
     # 이미지 생성
     max_guidance_scale = max([5, 6, 7, 8, 9, 10])  # 가장 큰 값 사용
-    num_images = 6  # 한 번에 6장 생성
+    num_images = 6  # 생성할 이미지 수
     inference_steps = 100  # 고정된 스텝 수
 
     generated_images = []  # 생성된 이미지 저장 리스트
 
-    for _ in range(num_images):
+    for step in inference_steps:
         with torch.autocast(device.type):
-            result = pipeline(
-                dreambooth_prompt,
-                num_inference_steps=inference_steps,
-                guidance_scale=max_guidance_scale,
-                num_images_per_prompt=1  # 한 번에 1장 생성
-            )
-            generated_images.append(result.images[0])  # 생성된 이미지를 리스트에 추가
+            result = pipeline(dreambooth_prompt, num_inference_steps=step, guidance_scale=max_guidance_scale)
+        generated_images.append(result.images[0])
 
     # 최종 이미지 6장 선택
     encoded_images = []
