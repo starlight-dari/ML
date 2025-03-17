@@ -48,7 +48,7 @@ BUCKET_NAME = os.getenv("BUCKET_NAME")
 
 # dreambooth
 MODEL_NAME = "runwayml/stable-diffusion-v1-5" 
-TRAIN_SCRIPT = "./train_dreambooth.py"
+TRAIN_SCRIPT = "./train_dreambooth_lora.py"
 
 # open_ai & Pinecone
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -381,10 +381,10 @@ def train_dreambooth():
 
         image_urls *= 2  # 데이터 증강
         
-        downloaded_images = download_s3_images(image_urls, "./train_images")
+        download_s3_images(image_urls, "./train_images")
 
         command = [
-            TRAIN_SCRIPT,
+            "accelerate", "launch", "--num_cpu_threads_per_process=1", TRAIN_SCRIPT,
             "--pretrained_model_name_or_path=runwayml/stable-diffusion-v1-5",
             "--instance_data_dir=./train_images",
             "--output_dir=./dreambooth_output",

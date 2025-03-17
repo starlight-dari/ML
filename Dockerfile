@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 실행 스크립트 복사 및 실행 권한 부여
 COPY download_and_run.sh /app/download_and_run.sh
-RUN chmod +x /app/train_dreambooth.py /app/download_and_run.sh
+RUN chmod +x /app/train_dreambooth.py /app/train_dreambooth_lora.py /app/download_and_run.sh
 
 # 6. 컨테이너 실행 시 수행할 명령
 CMD ["/bin/bash", "-c", "/app/download_and_run.sh && pip install --no-cache-dir git+https://github.com/huggingface/diffusers.git && python api_ml.py"]
