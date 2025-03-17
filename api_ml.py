@@ -442,6 +442,10 @@ def generate_images():
     character = data.get("character", "")
     breed = data.get("breed", "")
     texts = data.get("texts", [])
+    pet_id = int(data.get("pet_id", 0))  # 기본값 0
+    letter_id = int(data.get("letter_id", 0))  # 기본값 0
+
+    
     memories = [character, breed] + texts
 
     # GPT로 편지 생성
@@ -492,7 +496,7 @@ def generate_images():
     # 최종 이미지 6장 선택
     encoded_images = []
     for idx, image in enumerate(generated_images[:6]):
-        local_path = f"generated_image_{idx}.png"
+        local_path = f"{pet_id}/{letter_id}/generated_image_{idx}.png"
         
         # 이미지 저장 (PIL 이미지로 변환하여 PNG 형식으로 저장)
         image.save(local_path, format="PNG")
@@ -512,6 +516,86 @@ def generate_images():
     shutil.rmtree("./train_images", ignore_errors=True)
 
     return jsonify({"images": encoded_images, "letter": letter})
+
+@app.route('/letter_generate_random', methods=['POST'])
+def generate_images():
+    data = request.json
+    character = data.get("character", "")
+    breed = data.get("breed", "")
+    pet_id = int(data.get("pet_id", 0))  # 기본값 0
+    letter_id = int(data.get("letter_id", 0))  # 기본값 0
+
+    memories = [character, breed] 
+
+    # GPT로 편지 생성
+    letter_prompt = "반려동물의 성격과 반려동물과의 추억을 기록한 게시글을 바탕으로 \
+        반려동물이 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요."
+    letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY )
+    
+    # GPT로 DreamBooth 프롬프트 추출
+    prompt_extraction = "위 내용을 바탕으로 DreamBooth 모델에 적합한 프롬프트를 영어로 아주 짧게 생성하세요.\
+        어떤 상황을 묘사하는 내용이며 'a sks ...' 형식으로 시작해야 합니다.\
+        (ex) a sks cat on a grass"
+    dreambooth_prompt = generate_letter_answer(memories, prompt_extraction, OPENAI_API_KEY )
+    dreambooth_prompt = "high quality, J_illustration, " + dreambooth_prompt
+    
+    print(dreambooth_prompt)
+    
+    checkpoint_dir = "./dreambooth_output/checkpoint-700"
+    unet = UNet2DConditionModel.from_pretrained(
+        os.path.join(checkpoint_dir, "unet"),
+        torch_dtype=torch.float16,
+        local_files_only=True
+    ).to(device)
+
+    pipeline = DiffusionPipeline.from_pretrained(
+        MODEL_NAME,
+        unet=unet,
+        torch_dtype=torch.float16
+    ).to(device)
+    
+    lora_path = "./J_illustration.safetensors"
+    pipeline.load_lora_weights(lora_path)
+
+    # 이미지 생성
+    max_guidance_scale = max([5, 6, 7, 8, 9, 10])  # 가장 큰 값 사용
+    num_images = 6  # 한 번에 6장 생성
+    inference_steps = 100  # 고정된 스텝 수
+
+    with torch.autocast(device.type):
+        result = pipeline(
+            dreambooth_prompt,
+            num_inference_steps=inference_steps,
+            guidance_scale=max_guidance_scale,
+            num_images_per_prompt=num_images  # 한 번에 6장 생성
+        )
+
+    generated_images = result.images  # 6장의 이미지 리스트
+
+    # 최종 이미지 6장 선택
+    encoded_images = []
+    for idx, image in enumerate(generated_images[:6]):
+        local_path = f"{pet_id}/{letter_id}/generated_image_{idx}.png"
+        
+        # 이미지 저장 (PIL 이미지로 변환하여 PNG 형식으로 저장)
+        image.save(local_path, format="PNG")
+        print(f"✅ Image saved locally: {local_path}")
+
+        # S3 업로드
+        # object_name = f"generated_image_{idx}.png"
+        file_url = upload_png_to_s3(BUCKET_NAME, local_path)  # 로컬 파일 경로 사용
+
+        if file_url:
+            encoded_images.append(file_url)
+            print(f"✅ Uploaded to S3: {file_url}")
+        else:
+            print(f"❌ Failed to upload {local_path} to S3")
+
+    shutil.rmtree("./dreambooth_output", ignore_errors=True)
+    shutil.rmtree("./train_images", ignore_errors=True)
+
+    return jsonify({"images": encoded_images, "letter": letter})
+
 
 ############################
 ######### api_stars ########
