@@ -1053,112 +1053,107 @@ def enhance_contrast(image):
 
 @app.route("/stars_run_pidinet", methods=["POST"])
 def run_pidinet():
-    """
-    클라이언트로부터 이미지 리스트를 받아 PiDiNet 실행.
-    """
-    data = request.json
-    print(f"📥 Received Data: {data}")  # Debugging log
-
-    image_url = data.get("image_url")
-
-    if not image_url:
-        return jsonify({"error": "No images provided"}), 400
-
-    # 단일 문자열이면 리스트로 변환
-    if isinstance(image_url, str):
-        image_url = [image_url]
-        
-    stars_download_s3_images(image_urls = image_url, save_folder="./img")
-    
-    # 🔹 Step 3: PiDiNet 실행 명령어
-    command = [
-        "python", "pidinet-master/main.py",
-        "--model", "pidinet_converted",
-        "--config", "carv4",
-        "--sa", "--dil",
-        "-j", "4",
-        "--gpu", "0",
-        "--resume",
-        "--savedir", "./img_edges",
-        "--datadir", "./img",
-        "--dataset", "Custom",
-        "--evaluate", "./table5_pidinet.pth",
-        "--evaluate-converted"
-    ]
-
     try:
-        print("🚀 PiDiNet 실행 중...")
-        result = subprocess.run(command, check=True)  # 실행 (완료될 때까지 대기)
-        print("✅ PiDiNet 실행 완료!")
+        data = request.json
+        print(f"📥 Received Data: {data}")
 
-        return jsonify({
-            "message": "PiDiNet execution completed",
-        }), 200
+        image_url = data.get("image_url")
+        if not image_url:
+            return jsonify({"error": "No images provided"}), 400
 
-    except subprocess.CalledProcessError as e:
-        print(f"❌ PiDiNet 실행 실패: {e}")
-        return jsonify({"error": "PiDiNet execution failed"}), 500
+        if isinstance(image_url, str):
+            image_url = [image_url]
 
+        stars_download_s3_images(image_urls=image_url, save_folder="./img")
+
+        command = [
+            "python", "pidinet-master/main.py",
+            "--model", "pidinet_converted",
+            "--config", "carv4",
+            "--sa", "--dil",
+            "-j", "4",
+            "--gpu", "0",
+            "--resume",
+            "--savedir", "./img_edges",
+            "--datadir", "./img",
+            "--dataset", "Custom",
+            "--evaluate", "./table5_pidinet.pth",
+            "--evaluate-converted"
+        ]
+
+        try:
+            print("🚀 PiDiNet 실행 중...")
+            subprocess.run(command, check=True)
+            print("✅ PiDiNet 실행 완료!")
+            return jsonify({"message": "PiDiNet execution completed"}), 200
+        except subprocess.CalledProcessError as e:
+            print(f"❌ PiDiNet 실행 실패: {e}")
+            return jsonify({"error": "PiDiNet execution failed"}), 500
+    
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error: {e}"}), 500
 
 @app.route("/stars_process_image", methods=["POST"])
 def process_image():
-    """
-    클라이언트로부터 이미지 URL과 관련 정보를 받아 처리.
-    """
-    data = request.json
-    image_url = data.get("image_url")
-    point = data.get("point")
-
-    if not image_url:
-        return jsonify({"error": "No image URL provided"}), 400
-    
-    image_name = os.path.basename(image_url)
-    image_path = "./img/" + image_name
-    
-    image, image_rgb = load_and_preprocess_image(image_path)
-    mask = run_sam_segmentation(image_rgb, predictor, point)
-    
-    mask_ratio = np.count_nonzero(mask) / mask.size
-    max_internal_points = int(mask_ratio * 3000)
-    
-    contour_points2, internal_points2 = process_segmentation(image, mask, max_internal_points=max_internal_points)
-
-    image_path = f"./img_edges/eval_results/imgs_epoch_019/{os.path.splitext(image_name)[0]}.png"
-    image = Image.open(image_path)
-    image = np.array(image.convert("L"))
-    
-    masked_image = np.zeros_like(image, dtype=np.float32) 
-    masked_image[mask > 0] = image[mask > 0] 
-    processed_image = enhance_contrast(masked_image)
-    
-    svg_path = f"{os.path.splitext(image_name)[0]}.svg"
-    png_path = f"{os.path.splitext(image_name)[0]}_masked.png"
-    
-    image_to_svg(processed_image, svg_path)
-    cairosvg.svg2png(url=svg_path, write_to=png_path)
-    
     try:
-        svg_path = upload_svg_to_s3(BUCKET_NAME,f"{os.path.splitext(image_name)[0]}.svg")
+        data = request.json
+        image_url = data.get("image_url")
+        point = data.get("point")
+
+        if not image_url:
+            return jsonify({"error": "No image URL provided"}), 400
+        
+        image_name = os.path.basename(image_url)
+        image_path = "./img/" + image_name
+        
+        image, image_rgb = load_and_preprocess_image(image_path)
+        mask = run_sam_segmentation(image_rgb, predictor, point)
+
+        mask_ratio = np.count_nonzero(mask) / mask.size
+        max_internal_points = int(mask_ratio * 3000)
+        
+        contour_points2, internal_points2 = process_segmentation(image, mask, max_internal_points=max_internal_points)
+        
+        image_path = f"./img_edges/eval_results/imgs_epoch_019/{os.path.splitext(image_name)[0]}.png"
+        try:
+            image = Image.open(image_path)
+            image = np.array(image.convert("L"))
+        except Exception as e:
+            print(f"❌ 이미지 로드 실패: {e}")
+            return jsonify({"error": "Failed to load edge image"}), 500
+        
+        masked_image = np.zeros_like(image, dtype=np.float32)
+        masked_image[mask > 0] = image[mask > 0]
+        processed_image = enhance_contrast(masked_image)
+
+        svg_path = f"{os.path.splitext(image_name)[0]}.svg"
+        png_path = f"{os.path.splitext(image_name)[0]}_masked.png"
+        
+        try:
+            image_to_svg(processed_image, svg_path)
+            cairosvg.svg2png(url=svg_path, write_to=png_path)
+            svg_url = upload_svg_to_s3(BUCKET_NAME, svg_path)
+        except Exception as e:
+            print(f"❌ 파일 업로드 실패: {e}")
+            return jsonify({"error": "Failed to upload SVG file"}), 500
+
+        contour_points1, internal_points1 = sample_pidinet_edges(image, mask, sample_size=max_internal_points)
+        internal_points = np.vstack((internal_points1, internal_points2))
+        contour_points = np.vstack((contour_points2))
+
+        major_contour = extract_and_sort_centroids(contour_points, n_clusters=20, n_points=5)
+        major_internal = extract_and_sort_centroids(internal_points, n_clusters=20, n_points=10)
+        major_points = np.vstack((major_contour, major_internal))
+        edges = generate_mst_graph(major_points)
+
+        return jsonify({
+            "svg_path": svg_url,
+            "edges": edges.tolist(),
+            "major_points": major_points.astype(int).tolist()
+        })
+    
     except Exception as e:
-        print(f"파일 업로드 실패: {e}")
-    
-    contour_points1, internal_points1 = sample_pidinet_edges(image, mask, sample_size=max_internal_points)
-    
-    internal_points = np.vstack((internal_points1, internal_points2))
-    contour_points = np.vstack((contour_points2))
-
-    major_contour = extract_and_sort_centroids(contour_points, n_clusters=20, n_points=5)
-    major_internal = extract_and_sort_centroids(internal_points, n_clusters=20, n_points=10)
-    
-    major_points = np.vstack((major_contour, major_internal))
-    edges = generate_mst_graph(major_points)
-
-    return jsonify({
-        "svg_path": svg_path,
-        "edges": edges.tolist(),  # Convert NumPy arrays to lists
-        "major_points": major_points.astype(int).tolist()
-    })
-
+        return jsonify({"error": f"Unexpected error: {e}"}), 500
 
 
 if __name__ == '__main__':
