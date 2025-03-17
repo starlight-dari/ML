@@ -22,6 +22,7 @@ from sklearn.neighbors import kneighbors_graph
 from scipy.sparse.csgraph import minimum_spanning_tree, connected_components
 from sklearn.metrics import pairwise_distances
 from peft import PeftModel
+from diffusers import StableDiffusionPipeline
 
 # Pinecone & OpenAI
 import pinecone
@@ -442,49 +443,59 @@ def generate_images():
         if not data:
             return jsonify({"error": "Invalid JSON request"}), 400
 
-        character = data.get("character", "")
-        breed = data.get("breed", "")
-        texts = data.get("texts", [])
-        pet_id = int(data.get("pet_id", 0))  # 기본값 0
-        letter_id = int(data.get("letter_id", 0))  # 기본값 0
+        try:
+            character = data.get("character", "")
+            breed = data.get("breed", "")
+            texts = data.get("texts", [])
+            pet_id = int(data.get("pet_id", 0))
+            letter_id = int(data.get("letter_id", 0))
+        except (ValueError, TypeError) as e:
+            return jsonify({"error": f"Invalid data format: {e}"}), 400
 
         memories = [character, breed] + texts
 
         # GPT로 편지 생성
-        letter_prompt = "반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물이 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요."
-        letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
-        
+        try:
+            letter_prompt = "반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물이 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요."
+            letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
+        except Exception as e:
+            return jsonify({"error": f"Letter generation failed: {e}"}), 500
+
         # GPT로 DreamBooth 프롬프트 추출
-        prompt_extraction = "위 내용을 바탕으로 DreamBooth 모델에 적합한 프롬프트를 영어로 아주 짧게 생성하세요.\n        어떤 상황을 묘사하는 내용이며 'a sks ...' 형식으로 시작해야 합니다.\n        (ex) a sks cat on a grass"
-        dreambooth_prompt = generate_letter_answer(memories, prompt_extraction, OPENAI_API_KEY)
-        dreambooth_prompt = "high quality, J_illustration, " + dreambooth_prompt
-        
+        try:
+            prompt_extraction = "위 내용을 바탕으로 DreamBooth 모델에 적합한 프롬프트를 영어로 아주 짧게 생성하세요. 'a sks ...' 형식으로 시작해야 합니다."
+            dreambooth_prompt = generate_letter_answer(memories, prompt_extraction, OPENAI_API_KEY)
+            dreambooth_prompt = "high quality, J_illustration, " + dreambooth_prompt
+        except Exception as e:
+            return jsonify({"error": f"Prompt extraction failed: {e}"}), 500
+
         print(dreambooth_prompt)
 
-        try:
-            checkpoint_dir = "./dreambooth_output/checkpoint-700"
-            unet = UNet2DConditionModel.from_pretrained(
-                os.path.join(checkpoint_dir, "unet"),
-                torch_dtype=torch.float16,
-                local_files_only=True
-            ).to(device)
-        except Exception as e:
-            print(f"❌ UNet 모델 로드 실패: {e}")
-            return jsonify({"error": "Failed to load UNet model"}), 500
+        checkpoint_dir = "./dreambooth_output/checkpoint-700"
+        lora_weights_path = os.path.join(checkpoint_dir, "pytorch_lora_weights.safetensors")
+
+        if not os.path.exists(lora_weights_path):
+            return jsonify({"error": "LoRA weights not found"}), 500
 
         try:
-            pipeline = DiffusionPipeline.from_pretrained(
+            # 기본 Stable Diffusion 모델 로드
+            pipeline = StableDiffusionPipeline.from_pretrained(
                 MODEL_NAME,
-                unet=unet,
                 torch_dtype=torch.float16
             ).to(device)
+
+            # LoRA 가중치 로드
+            pipeline.unet.load_attn_procs(lora_weights_path)
+        except Exception as e:
+            return jsonify({"error": f"Failed to initialize diffusion pipeline: {e}"}), 500
+
+        try:
             lora_path = "./J_illustration.safetensors"
             pipeline.load_lora_weights(lora_path)
         except Exception as e:
-            print(f"❌ DiffusionPipeline 초기화 실패: {e}")
-            return jsonify({"error": "Failed to initialize diffusion pipeline"}), 500
+            return jsonify({"error": f"Failed to load LoRA weights: {e}"}), 500
 
-        max_guidance_scale = max([5, 6, 7, 8, 9, 10])  # 가장 큰 값 사용
+        max_guidance_scale = 10  # 가장 큰 값 사용
         inference_steps = 100  # 고정된 스텝 수
         generated_images = []
 
@@ -493,33 +504,28 @@ def generate_images():
                 result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=max_guidance_scale)
             generated_images.append(result.images[0])
         except torch.cuda.OutOfMemoryError:
-            print("⚠️ GPU 메모리 부족 오류 발생. 이미지 생성 중단.")
             return jsonify({"error": "GPU out of memory during image generation"}), 500
         except Exception as e:
-            print(f"❌ 이미지 생성 실패: {e}")
-            return jsonify({"error": "Failed to generate images"}), 500
+            return jsonify({"error": f"Image generation failed: {e}"}), 500
 
         encoded_images = []
         for idx, image in enumerate(generated_images[:6]):
             local_path = f"{pet_id}/{letter_id}/generated_image_{idx}.png"
             try:
                 image.save(local_path, format="PNG")
-                print(f"✅ Image saved locally: {local_path}")
                 file_url = upload_png_to_s3(BUCKET_NAME, local_path)
                 if file_url:
                     encoded_images.append(file_url)
-                    print(f"✅ Uploaded to S3: {file_url}")
                 else:
-                    print(f"❌ Failed to upload {local_path} to S3")
+                    return jsonify({"error": f"Failed to upload image {idx} to S3"}), 500
             except Exception as e:
-                print(f"❌ 이미지 저장 또는 업로드 실패: {e}")
-                return jsonify({"error": "Failed to save or upload images"}), 500
+                return jsonify({"error": f"Failed to save or upload image {idx}: {e}"}), 500
 
         shutil.rmtree("./dreambooth_output", ignore_errors=True)
         shutil.rmtree("./train_images", ignore_errors=True)
 
         return jsonify({"images": encoded_images, "letter": letter})
-    
+
     except Exception as e:
         return jsonify({"error": f"Unexpected error: {e}"}), 500
 
@@ -553,31 +559,32 @@ def generate_images_random():
 
         print(dreambooth_prompt)
 
-        try:
-            checkpoint_dir = "./dreambooth_output/checkpoint-700"
-            unet = UNet2DConditionModel.from_pretrained(
-                os.path.join(checkpoint_dir, "unet"),
-                torch_dtype=torch.float16,
-                local_files_only=True
-            ).to(device)
-        except Exception as e:
-            print(f"❌ UNet 모델 로드 실패: {e}")
-            return jsonify({"error": "Failed to load UNet model"}), 500
+        checkpoint_dir = "./dreambooth_output/checkpoint-700"
+        lora_weights_path = os.path.join(checkpoint_dir, "pytorch_lora_weights.safetensors")
+
+        if not os.path.exists(lora_weights_path):
+            return jsonify({"error": "LoRA weights not found"}), 500
 
         try:
-            pipeline = DiffusionPipeline.from_pretrained(
+            # 기본 Stable Diffusion 모델 로드
+            pipeline = StableDiffusionPipeline.from_pretrained(
                 MODEL_NAME,
-                unet=unet,
                 torch_dtype=torch.float16
             ).to(device)
+
+            # LoRA 가중치 로드
+            pipeline.unet.load_attn_procs(lora_weights_path)
+        except Exception as e:
+            return jsonify({"error": f"Failed to initialize diffusion pipeline: {e}"}), 500
+
+        try:
             lora_path = "./J_illustration.safetensors"
             pipeline.load_lora_weights(lora_path)
         except Exception as e:
-            print(f"❌ DiffusionPipeline 초기화 실패: {e}")
-            return jsonify({"error": "Failed to initialize diffusion pipeline"}), 500
+            return jsonify({"error": f"Failed to load LoRA weights: {e}"}), 500
 
-        max_guidance_scale = 10  # 최대값 사용
-        inference_steps = 100
+        max_guidance_scale = 10  # 가장 큰 값 사용
+        inference_steps = 100  # 고정된 스텝 수
         generated_images = []
 
         try:
@@ -585,33 +592,28 @@ def generate_images_random():
                 result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=max_guidance_scale)
             generated_images.append(result.images[0])
         except torch.cuda.OutOfMemoryError:
-            print("⚠️ GPU 메모리 부족 오류 발생. 이미지 생성 중단.")
             return jsonify({"error": "GPU out of memory during image generation"}), 500
         except Exception as e:
-            print(f"❌ 이미지 생성 실패: {e}")
-            return jsonify({"error": "Failed to generate images"}), 500
+            return jsonify({"error": f"Image generation failed: {e}"}), 500
 
         encoded_images = []
         for idx, image in enumerate(generated_images[:6]):
             local_path = f"{pet_id}/{letter_id}/generated_image_{idx}.png"
             try:
                 image.save(local_path, format="PNG")
-                print(f"✅ Image saved locally: {local_path}")
                 file_url = upload_png_to_s3(BUCKET_NAME, local_path)
                 if file_url:
                     encoded_images.append(file_url)
-                    print(f"✅ Uploaded to S3: {file_url}")
                 else:
-                    print(f"❌ Failed to upload {local_path} to S3")
+                    return jsonify({"error": f"Failed to upload image {idx} to S3"}), 500
             except Exception as e:
-                print(f"❌ 이미지 저장 또는 업로드 실패: {e}")
-                return jsonify({"error": "Failed to save or upload images"}), 500
+                return jsonify({"error": f"Failed to save or upload image {idx}: {e}"}), 500
 
         shutil.rmtree("./dreambooth_output", ignore_errors=True)
         shutil.rmtree("./train_images", ignore_errors=True)
 
         return jsonify({"images": encoded_images, "letter": letter})
-    
+
     except Exception as e:
         return jsonify({"error": f"Unexpected error: {e}"}), 500
 
@@ -639,31 +641,32 @@ def generate_images_birth_death():
         
         print(dreambooth_prompt)
 
-        try:
-            checkpoint_dir = "./dreambooth_output/checkpoint-700"
-            unet = UNet2DConditionModel.from_pretrained(
-                os.path.join(checkpoint_dir, "unet"),
-                torch_dtype=torch.float16,
-                local_files_only=True
-            ).to(device)
-        except Exception as e:
-            print(f"❌ UNet 모델 로드 실패: {e}")
-            return jsonify({"error": "Failed to load UNet model"}), 500
+        checkpoint_dir = "./dreambooth_output/checkpoint-700"
+        lora_weights_path = os.path.join(checkpoint_dir, "pytorch_lora_weights.safetensors")
+
+        if not os.path.exists(lora_weights_path):
+            return jsonify({"error": "LoRA weights not found"}), 500
 
         try:
-            pipeline = DiffusionPipeline.from_pretrained(
+            # 기본 Stable Diffusion 모델 로드
+            pipeline = StableDiffusionPipeline.from_pretrained(
                 MODEL_NAME,
-                unet=unet,
                 torch_dtype=torch.float16
             ).to(device)
+
+            # LoRA 가중치 로드
+            pipeline.unet.load_attn_procs(lora_weights_path)
+        except Exception as e:
+            return jsonify({"error": f"Failed to initialize diffusion pipeline: {e}"}), 500
+
+        try:
             lora_path = "./J_illustration.safetensors"
             pipeline.load_lora_weights(lora_path)
         except Exception as e:
-            print(f"❌ DiffusionPipeline 초기화 실패: {e}")
-            return jsonify({"error": "Failed to initialize diffusion pipeline"}), 500
+            return jsonify({"error": f"Failed to load LoRA weights: {e}"}), 500
 
-        max_guidance_scale = 10  # 최대값 사용
-        inference_steps = 100
+        max_guidance_scale = 10  # 가장 큰 값 사용
+        inference_steps = 100  # 고정된 스텝 수
         generated_images = []
 
         try:
@@ -671,33 +674,28 @@ def generate_images_birth_death():
                 result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=max_guidance_scale)
             generated_images.append(result.images[0])
         except torch.cuda.OutOfMemoryError:
-            print("⚠️ GPU 메모리 부족 오류 발생. 이미지 생성 중단.")
             return jsonify({"error": "GPU out of memory during image generation"}), 500
         except Exception as e:
-            print(f"❌ 이미지 생성 실패: {e}")
-            return jsonify({"error": "Failed to generate images"}), 500
+            return jsonify({"error": f"Image generation failed: {e}"}), 500
 
         encoded_images = []
         for idx, image in enumerate(generated_images[:6]):
             local_path = f"{pet_id}/{letter_id}/generated_image_{idx}.png"
             try:
                 image.save(local_path, format="PNG")
-                print(f"✅ Image saved locally: {local_path}")
                 file_url = upload_png_to_s3(BUCKET_NAME, local_path)
                 if file_url:
                     encoded_images.append(file_url)
-                    print(f"✅ Uploaded to S3: {file_url}")
                 else:
-                    print(f"❌ Failed to upload {local_path} to S3")
+                    return jsonify({"error": f"Failed to upload image {idx} to S3"}), 500
             except Exception as e:
-                print(f"❌ 이미지 저장 또는 업로드 실패: {e}")
-                return jsonify({"error": "Failed to save or upload images"}), 500
+                return jsonify({"error": f"Failed to save or upload image {idx}: {e}"}), 500
 
         shutil.rmtree("./dreambooth_output", ignore_errors=True)
         shutil.rmtree("./train_images", ignore_errors=True)
 
         return jsonify({"images": encoded_images, "letter": letter})
-    
+
     except Exception as e:
         return jsonify({"error": f"Unexpected error: {e}"}), 500
 
