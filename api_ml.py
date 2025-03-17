@@ -263,89 +263,74 @@ def generate_answer(query, relevant_texts, prompt_template):
 
 @app.route('/rag_get_answer', methods=['POST'])
 def get_answer():
-    """클라이언트 요청 처리"""
-    data = request.json
-    route_num = data.get("route_num")
-    query = data.get("query")
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "Invalid JSON request"}), 400
 
-    if route_num is None or query is None:
-        return jsonify({"error": "route_num과 query가 필요합니다."}), 400
-
-    if route_num == 0:
-        # 보험 정보 검색 및 답변
-        meritz_texts = search_index(index_meritz, query, top_k=3)
-        samsung_texts = search_index(index_samsung, query, top_k=3)
-        hanhwa_texts = search_index(index_hanhwa, query, top_k=3)
+        route_num = data.get("route_num")
+        query = data.get("query")
         
-        relevant_texts = (
-            ["[메리츠]\n" + "\n".join(meritz_texts)] +
-            ["[삼성화재]\n" + "\n".join(samsung_texts)] +
-            ["[한화]\n" + "\n".join(hanhwa_texts)]
-        )
+        if route_num is None or query is None:
+            return jsonify({"error": "route_num과 query가 필요합니다."}), 400
 
-        prompt_template = (
-            "당신은 보험 추천 도우미입니다. 아래의 문맥을 참고하여 3개 보험사를 비교하여 질문에 정확하고 이해하기 쉬운 답변을 300자 이내로 해주세요.\n"
-            "문맥: {context}\n\n"
-            "질문: {question}\n"
-            "답변:"
-        )
-    
-    elif route_num == 1:
-        # 반려동물 정보 검색 및 답변
-        diagnostic_texts = search_index(index_diagnostic, query, top_k=7)
+        if route_num == 0:
+            meritz_texts = search_index(index_meritz, query, top_k=3)
+            samsung_texts = search_index(index_samsung, query, top_k=3)
+            hanhwa_texts = search_index(index_hanhwa, query, top_k=3)
+            
+            relevant_texts = (
+                ["[메리츠]\n" + "\n".join(meritz_texts)] +
+                ["[삼성화재]\n" + "\n".join(samsung_texts)] +
+                ["[한화]\n" + "\n".join(hanhwa_texts)]
+            )
 
-        relevant_texts = diagnostic_texts
+            prompt_template = (
+                "당신은 보험 추천 도우미입니다. 아래의 문맥을 참고하여 3개 보험사를 비교하여 질문에 정확하고 이해하기 쉬운 답변을 300자 이내로 해주세요.\n"
+                "문맥: {context}\n\n"
+                "질문: {question}\n"
+                "답변:"
+            )
+        
+        elif route_num == 1:
+            diagnostic_texts = search_index(index_diagnostic, query, top_k=7)
+            relevant_texts = diagnostic_texts
 
-        prompt_template = (
-            "당신은 노령견 전문 정보 제공 도우미입니다. 아래의 문맥을 참고하여 300자 이내로 질문에 정확하고 이해하기 쉬운 답변을 해주세요.\n"
-            "문맥: {context}\n\n"
-            "질문: {question}\n"
-            "답변:"
-        )
-    
-    elif route_num == 2:
-        # 장례식장 정보 검색 및 답변
-        relevant_texts = [str(funeral_data)]
+            prompt_template = (
+                "당신은 노령견 전문 정보 제공 도우미입니다. 아래의 문맥을 참고하여 300자 이내로 질문에 정확하고 이해하기 쉬운 답변을 해주세요.\n"
+                "문맥: {context}\n\n"
+                "질문: {question}\n"
+                "답변:"
+            )
+        
+        elif route_num == 2:
+            relevant_texts = [str(funeral_data)]
 
-        prompt_template = (
-            "당신은 장례식장 관련 정보를 제공하는 전문가입니다. "
-            "아래의 문맥을 참고하여 사용자가 원하는 서비스를 파악한 후 가장 적합한 장례식장을 문맥에서 찾아 안내해주세요.\n"
-            "서울특별시는 경기도와 맞닿아 있고 경기도는 동쪽으로 강원도, 남쪽으로 충청남도, 충청북도와 맞닿아 있음 \
-            충청남도와 충청북도 사이에 대전광역시가 있고\
-            충청남도 남쪽에 전라북도가 있고\
-            충청북도 동남쪽에 경상북도가 있고\
-            전라북도와 경상북도 사이 남쪽에 경상남도가 있고\
-            전라북도와 경상남도 사이 남서방향에 전라남도가 있음\
-            서울특별시는 경기도에 둘러싸여 있고\
-            인천광역시는 서울 서쪽에 위치하며 경기도와 접하고 있음\
-            대전광역시는 충청남도와 충청북도 사이에 위치하고\
-            광주광역시는 전라남도에 위치하며 전라북도와 인접해 있음\
-            대구광역시는 경상북도 내에 위치하고\
-            부산광역시는 경상남도 남단에 위치하며 남해에 접하고 있음\
-            울산광역시는 경상남도 동북쪽에 위치하며 동쪽은 바다(동해)와 접함\
-            "
-            "문맥: {context}\n\n"
-            "질문: {question}\n"
-            "답변:"
-        )
-    
-    elif route_num == 3:
-        answer = """다음은 펫로스 증후근 극복 프로그램 링크 목록입니다.
-마인드카페 센터
-: https://center.mindcafe.co.kr/program_petloss
-
-마음치유모임 with 펫로스
-: https://www.gangnam.go.kr/contents/mind_healing/1/view.do?mid=ID04_04075401
-
-"""
-
+            prompt_template = (
+                "당신은 장례식장 관련 정보를 제공하는 전문가입니다. "
+                "아래의 문맥을 참고하여 사용자가 원하는 서비스를 파악한 후 가장 적합한 장례식장을 문맥에서 찾아 안내해주세요.\n"
+                "문맥: {context}\n\n"
+                "질문: {question}\n"
+                "답변:"
+            )
+        
+        elif route_num == 3:
+            answer = """다음은 펫로스 증후군 극복 프로그램 링크 목록입니다.\n마인드카페 센터\n: https://center.mindcafe.co.kr/program_petloss\n\n마음치유모임 with 펫로스\n: https://www.gangnam.go.kr/contents/mind_healing/1/view.do?mid=ID04_04075401\n"""
+            return jsonify({"answer": answer})
+        
+        else:
+            return jsonify({"error": "route_num 값이 올바르지 않습니다."}), 400
+        
+        try:
+            answer = generate_answer(query, relevant_texts, prompt_template)
+        except Exception as e:
+            print(f"❌ GPT 답변 생성 실패: {e}")
+            return jsonify({"error": "Failed to generate answer"}), 500
+        
         return jsonify({"answer": answer})
     
-    else:
-        return jsonify({"error": "route_num 값이 올바르지 않습니다."}), 400
-    answer = generate_answer(query, relevant_texts, prompt_template)
-    
-    return jsonify({"answer": answer})
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error: {e}"}), 500
 
 ############################
 ## api_letter_dreambooth ###
