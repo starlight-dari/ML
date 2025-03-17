@@ -449,7 +449,7 @@ def generate_images():
     memories = [character, breed] + texts
 
     # GPT로 편지 생성
-    letter_prompt = "반려동물의 성격과 반려동물과의 추억을 기록한 게시글을 바탕으로 \
+    letter_prompt = "반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 \
         반려동물이 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요."
     letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY )
     
@@ -524,12 +524,47 @@ def generate_images():
     breed = data.get("breed", "")
     pet_id = int(data.get("pet_id", 0))  # 기본값 0
     letter_id = int(data.get("letter_id", 0))  # 기본값 0
-
+    
+    letter_topics = [
+        "무지개 다리 건너에서의 나날들",
+        "너와 함께했던 가장 행복한 순간",
+        "처음 너를 만났을 때의 기억",
+        "내가 가장 좋아했던 음식과 간식",
+        "내가 가장 좋아했던 장소",
+        "우리만의 특별한 의식",
+        "네가 해준 최고의 보살핌",
+        "내가 가끔 사고를 쳤을 때의 이야기",
+        "너를 보며 느꼈던 따뜻한 감정",
+        "나를 처음 불렀을 때의 기억",
+        "나를 처음 쓰다듬었을 때의 기분",
+        "네가 나를 위해 해준 가장 특별한 일",
+        "내가 너를 바라보며 했던 생각들",
+        "너와 함께한 소중한 일상",
+        "우리만이 이해할 수 있는 작은 습관들",
+        "가장 좋아했던 장난감과 놀이",
+        "너와 함께했던 계절별 추억",
+        "네가 힘들 때 곁에서 해주고 싶었던 말",
+        "떠나기 전 마지막으로 하고 싶었던 말",
+        "내가 네게 전하고 싶은 감사의 말",
+        "무지개 다리 너머에서 새로운 친구들을 만난 이야기",
+        "이곳에서의 새로운 발견과 경험",
+        "네가 내게 가르쳐준 소중한 것들",
+        "내가 너와 다시 만날 날을 꿈꾸며",
+        "네가 내게 준 사랑을 어떻게 간직하고 있는지",
+        "내가 가장 편안함을 느꼈던 순간",
+        "내가 가장 두려워했던 것과 네가 어떻게 날 안심시켰는지",
+        "네가 나를 위해 불러줬던 노래나 소리",
+        "내가 가장 좋아했던 너의 행동",
+        "네가 내 곁에 있어줘서 얼마나 행복했는지"
+    ]
+    letter_index = random.randint(0, 29)
+    letter_topic = letter_topics[letter_index]
+    
     memories = [character, breed] 
 
     # GPT로 편지 생성
-    letter_prompt = "반려동물의 성격과 반려동물과의 추억을 기록한 게시글을 바탕으로 \
-        반려동물이 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요."
+    letter_prompt = f"반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 \
+        {letter_topic}을 주제로 반려동물이 주인에게 쓰는 따뜻한 안부 인사 편지를 반말로 작성해 주세요."
     letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY )
     
     # GPT로 DreamBooth 프롬프트 추출
@@ -596,6 +631,85 @@ def generate_images():
 
     return jsonify({"images": encoded_images, "letter": letter})
 
+@app.route('/letter_generate_birth_death', methods=['POST'])
+def generate_images():
+    data = request.json
+    character = data.get("character", "")
+    texts = data.get("texts", [])
+    breed = data.get("breed", "")
+    pet_id = int(data.get("pet_id", 0))  # 기본값 0
+    letter_id = int(data.get("letter_id", 0))  # 기본값 0
+    
+    memories = [character, breed] 
+
+    # GPT로 편지 생성
+    letter_prompt = f"오늘은 특별한 날입니다. 반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 \
+        반려동물의 {texts}을 주제로 반려동물이 주인에게 쓰는 따뜻한 안부 인사 편지를 반말로 작성해 주세요."
+    letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY )
+    
+    # GPT로 DreamBooth 프롬프트 추출
+    prompt_extraction = "위 내용을 바탕으로 DreamBooth 모델에 적합한 프롬프트를 영어로 아주 짧게 생성하세요.\
+        어떤 상황을 묘사하는 내용이며 'a sks ...' 형식으로 시작해야 합니다.\
+        (ex) a sks cat on a grass"
+    dreambooth_prompt = generate_letter_answer(memories, prompt_extraction, OPENAI_API_KEY )
+    dreambooth_prompt = "high quality, J_illustration, " + dreambooth_prompt
+    
+    print(dreambooth_prompt)
+    
+    checkpoint_dir = "./dreambooth_output/checkpoint-700"
+    unet = UNet2DConditionModel.from_pretrained(
+        os.path.join(checkpoint_dir, "unet"),
+        torch_dtype=torch.float16,
+        local_files_only=True
+    ).to(device)
+
+    pipeline = DiffusionPipeline.from_pretrained(
+        MODEL_NAME,
+        unet=unet,
+        torch_dtype=torch.float16
+    ).to(device)
+    
+    lora_path = "./J_illustration.safetensors"
+    pipeline.load_lora_weights(lora_path)
+
+    # 이미지 생성
+    max_guidance_scale = max([5, 6, 7, 8, 9, 10])  # 가장 큰 값 사용
+    num_images = 6  # 한 번에 6장 생성
+    inference_steps = 100  # 고정된 스텝 수
+
+    with torch.autocast(device.type):
+        result = pipeline(
+            dreambooth_prompt,
+            num_inference_steps=inference_steps,
+            guidance_scale=max_guidance_scale,
+            num_images_per_prompt=num_images  # 한 번에 6장 생성
+        )
+
+    generated_images = result.images  # 6장의 이미지 리스트
+
+    # 최종 이미지 6장 선택
+    encoded_images = []
+    for idx, image in enumerate(generated_images[:6]):
+        local_path = f"{pet_id}/{letter_id}/generated_image_{idx}.png"
+        
+        # 이미지 저장 (PIL 이미지로 변환하여 PNG 형식으로 저장)
+        image.save(local_path, format="PNG")
+        print(f"✅ Image saved locally: {local_path}")
+
+        # S3 업로드
+        # object_name = f"generated_image_{idx}.png"
+        file_url = upload_png_to_s3(BUCKET_NAME, local_path)  # 로컬 파일 경로 사용
+
+        if file_url:
+            encoded_images.append(file_url)
+            print(f"✅ Uploaded to S3: {file_url}")
+        else:
+            print(f"❌ Failed to upload {local_path} to S3")
+
+    shutil.rmtree("./dreambooth_output", ignore_errors=True)
+    shutil.rmtree("./train_images", ignore_errors=True)
+
+    return jsonify({"images": encoded_images, "letter": letter})
 
 ############################
 ######### api_stars ########
