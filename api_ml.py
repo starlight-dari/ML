@@ -49,7 +49,7 @@ BUCKET_NAME = os.getenv("BUCKET_NAME")
 
 # dreambooth
 MODEL_NAME = "runwayml/stable-diffusion-v1-5" 
-TRAIN_SCRIPT = "./train_dreambooth_lora.py"
+TRAIN_SCRIPT = "./train_dreambooth.py"
 
 # open_ai & Pinecone
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -385,7 +385,7 @@ def train_dreambooth():
         download_s3_images(image_urls, "./train_images")
 
         command = [
-            "accelerate", "launch", "--num_cpu_threads_per_process=1", TRAIN_SCRIPT,
+            "accelerate", "launch", "--num_cpu_threads_per_process=4", TRAIN_SCRIPT,
             "--pretrained_model_name_or_path=runwayml/stable-diffusion-v1-5",
             "--instance_data_dir=./train_images",
             "--output_dir=./dreambooth_output",
@@ -472,23 +472,22 @@ def generate_images():
         print(dreambooth_prompt)
 
         checkpoint_dir = "./dreambooth_output/checkpoint-700"
-        lora_weights_path = os.path.join(checkpoint_dir, "pytorch_lora_weights.safetensors")
-
-        if not os.path.exists(lora_weights_path):
-            return jsonify({"error": "LoRA weights not found"}), 500
 
         try:
-            # 기본 Stable Diffusion 모델 로드
-            pipeline = StableDiffusionPipeline.from_pretrained(
+            unet = UNet2DConditionModel.from_pretrained(
+                os.path.join(checkpoint_dir, "unet"),
+                torch_dtype=torch.float16,
+                local_files_only=True
+            ).to(device)
+            
+            pipeline = DiffusionPipeline.from_pretrained(
                 MODEL_NAME,
+                unet=unet,
                 torch_dtype=torch.float16
             ).to(device)
-
-            # LoRA 가중치 로드
-            pipeline.unet.load_attn_procs(lora_weights_path)
         except Exception as e:
             return jsonify({"error": f"Failed to initialize diffusion pipeline: {e}"}), 500
-
+            
         try:
             lora_path = "./J_illustration.safetensors"
             pipeline.load_lora_weights(lora_path)
