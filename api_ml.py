@@ -445,7 +445,6 @@ def generate_images():
     pet_id = int(data.get("pet_id", 0))  # 기본값 0
     letter_id = int(data.get("letter_id", 0))  # 기본값 0
 
-    
     memories = [character, breed] + texts
 
     # GPT로 편지 생성
@@ -518,7 +517,7 @@ def generate_images():
     return jsonify({"images": encoded_images, "letter": letter})
 
 @app.route('/letter_generate_random', methods=['POST'])
-def generate_images():
+def generate_images_random():
     data = request.json
     character = data.get("character", "")
     breed = data.get("breed", "")
@@ -632,7 +631,7 @@ def generate_images():
     return jsonify({"images": encoded_images, "letter": letter})
 
 @app.route('/letter_generate_birth_death', methods=['POST'])
-def generate_images():
+def generate_images_birth_death():
     data = request.json
     character = data.get("character", "")
     texts = data.get("texts", [])
