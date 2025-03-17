@@ -1,4 +1,4 @@
-accelerate
+# accelerate
 boto3>=1.36.24
 bitsandbytes
 botocore>=1.37.9

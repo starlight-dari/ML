@@ -387,6 +387,7 @@ def generate_letter_answer(memories, prompt, openai_api_key):
 def train_dreambooth():
     data = request.json
     image_urls = data.get("images", [])
+    image_urls = image_urls * 2
 
     if not image_urls:
         return jsonify({"error": "No images provided"}), 400

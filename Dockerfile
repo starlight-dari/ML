@@ -23,4 +23,3 @@ CMD ["/bin/bash", "-c", "/app/download_and_run.sh && pip install --no-cache-dir 
 
 
 
-
