@@ -771,14 +771,15 @@ def generate_mst_graph(major_points):
     return edges
 
 def image_to_svg(image, svg_path, threshold=128):
-    """이미지를 SVG 포맷으로 변환"""
-    height, width = image.shape
+    """Convert a processed grayscale image to SVG"""
+    height, width = image.shape  # Ensure it's 2D
     dwg = svgwrite.Drawing(svg_path, size=(width, height))
+    dwg.attribs['opacity'] = '0.245' 
 
     for y in range(height):
         for x in range(width):
-            if image[y, x] >= threshold:
-                dwg.add(dwg.circle(center=(x, y), r=0.5, fill='gray', stroke='none'))
+            if image[y, x] >= threshold:  # Keep high-contrast areas
+                dwg.add(dwg.circle(center=(x, y), r=1, fill='#A8C4F7', stroke='none'))
     
     dwg.save()
 
