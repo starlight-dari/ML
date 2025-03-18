@@ -505,7 +505,7 @@ def generate_images():
     inference_steps = 100  # 고정된 스텝 수
     generated_images = []
 
-    for scal_e in max_guidance_scale:
+    for scale in max_guidance_scale:
         result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=scale)
         generated_images.append(result.images[0])
 
