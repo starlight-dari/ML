@@ -23,6 +23,7 @@ from scipy.sparse.csgraph import minimum_spanning_tree, connected_components
 from sklearn.metrics import pairwise_distances
 from peft import PeftModel
 from diffusers import StableDiffusionPipeline
+import gc
 
 # Pinecone & OpenAI
 import pinecone
@@ -396,7 +397,7 @@ def train_dreambooth():
             "--output_dir=./dreambooth_output",
             "--instance_prompt=a sks pet",
             "--resolution=256",
-            "--train_batch_size=2",
+            "--train_batch_size=1",
             "--gradient_accumulation_steps=1",
             "--gradient_checkpointing",
             "--mixed_precision=fp16",
@@ -489,19 +490,6 @@ def generate_images():
         torch_dtype=torch.float16
     ).to(device)
     
-    # ########## LORA ############
-    
-    # checkpoint_dir = "./dreambooth_output/checkpoint-700"
-    # lora_weights_path = os.path.join(checkpoint_dir, "pytorch_lora_weights.safetensors")
-    
-    # pipeline = StableDiffusionPipeline.from_pretrained(
-    #     MODEL_NAME,
-    #     torch_dtype=torch.float16
-    # ).to(device)
-    
-    # # LoRA 가중치 로드
-    # pipeline.unet.load_attn_procs(lora_weights_path)
-    
     lora_path = "./J_illustration.safetensors"
     pipeline.load_lora_weights(lora_path)
 
@@ -518,13 +506,12 @@ def generate_images():
     for idx, image in enumerate(generated_images[:6]):
         local_path = f"generated_image_{idx}.png"
 
-        # 이미지 저장 (PIL 이미지로 변환하여 PNG 형식으로 저장)
+        # 이미지 저장
         image.save(local_path, format="PNG")
         print(f"✅ Image saved locally: {local_path}")
 
         # S3 업로드
-        # object_name = f"generated_image_{idx}.png"
-        file_url = upload_png_to_s3(BUCKET_NAME, local_path, pet_id, letter_id)  # 로컬 파일 경로 사용
+        file_url = upload_png_to_s3(BUCKET_NAME, local_path, pet_id, letter_id)
 
         if file_url:
             encoded_images.append(file_url)
@@ -532,8 +519,15 @@ def generate_images():
         else:
             print(f"❌ Failed to upload {local_path} to S3")
 
+    # 불필요한 파일 삭제
     shutil.rmtree("./dreambooth_output", ignore_errors=True)
     shutil.rmtree("./train_images", ignore_errors=True)
+
+    # GPU 메모리 정리
+    del pipeline
+    del unet
+    torch.cuda.empty_cache()
+    gc.collect()
 
     return jsonify({"images": encoded_images, "letter": letter})
 
