@@ -444,6 +444,12 @@ def get_training_status():
 
 @app.route('/letter_generate', methods=['POST'])
 def generate_images():
+    
+    # pipeline과 unet을 None으로 설정
+    global pipeline, unet
+    pipeline = None
+    unet = None
+    
     data = request.json
     if not data:
         return jsonify({"error": "Invalid JSON request"}), 400
