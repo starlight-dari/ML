@@ -404,8 +404,8 @@ def train_dreambooth():
             "--learning_rate=5e-6",
             "--lr_scheduler=constant",
             "--lr_warmup_steps=0",
-            "--max_train_steps=350",
-            "--checkpointing_steps=350",
+            "--max_train_steps=400",
+            "--checkpointing_steps=400",
             "--enable_xformers_memory_efficient_attention",
             "--use_8bit_adam",
         ]
@@ -469,7 +469,7 @@ def generate_images():
 
     # GPT로 편지 생성
     try:
-        letter_prompt = "반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물이 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인은 {member_name}의 호칭으로 불러주세요."
+        letter_prompt = f"반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물이 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인은 {member_name}의 호칭으로 불러주세요."
         letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
     except Exception as e:
         return jsonify({"error": f"Letter generation failed: {e}"}), 500
@@ -484,7 +484,7 @@ def generate_images():
 
     print(dreambooth_prompt)
     
-    checkpoint_dir = "./dreambooth_output/checkpoint-350"
+    checkpoint_dir = "./dreambooth_output/checkpoint-400"
     
     unet = UNet2DConditionModel.from_pretrained(
         os.path.join(checkpoint_dir, "unet"),
@@ -501,12 +501,12 @@ def generate_images():
     lora_path = "./J_illustration.safetensors"
     pipeline.load_lora_weights(lora_path)
 
-    max_guidance_scale = 11  # 가장 큰 값 사용
+    max_guidance_scale = [10,11,12,13,14,15]  # 가장 큰 값 사용
     inference_steps = 100  # 고정된 스텝 수
     generated_images = []
 
-    for i in range(6):
-        result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=max_guidance_scale)
+    for scal_e in max_guidance_scale:
+        result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=scale)
         generated_images.append(result.images[0])
 
     # 최종 이미지 6장 선택
