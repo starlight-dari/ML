@@ -49,7 +49,7 @@ BUCKET_NAME = os.getenv("BUCKET_NAME")
 
 # dreambooth
 MODEL_NAME = "runwayml/stable-diffusion-v1-5" 
-TRAIN_SCRIPT = "./train_dreambooth_lora.py"
+TRAIN_SCRIPT = "./train_dreambooth.py"
 
 # open_ai & Pinecone
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -385,7 +385,7 @@ def train_dreambooth():
         if not image_urls:
             return jsonify({"error": "No images provided"}), 400
 
-        image_urls *= 5  # 데이터 증강
+        image_urls *= 2  # 데이터 증강
         
         download_s3_images(image_urls, "./train_images")
 
@@ -396,8 +396,8 @@ def train_dreambooth():
             "--output_dir=./dreambooth_output",
             "--instance_prompt=a sks pet",
             "--resolution=256",
-            "--train_batch_size=4",
-            "--gradient_accumulation_steps=4",
+            "--train_batch_size=2",
+            "--gradient_accumulation_steps=1",
             "--gradient_checkpointing",
             "--mixed_precision=fp16",
             "--learning_rate=5e-6",
@@ -475,32 +475,32 @@ def generate_images():
 
     print(dreambooth_prompt)
     
-    # checkpoint_dir = "./dreambooth_output/checkpoint-700"
+    checkpoint_dir = "./dreambooth_output/checkpoint-700"
     
-    # unet = UNet2DConditionModel.from_pretrained(
-    #     os.path.join(checkpoint_dir, "unet"),
-    #     torch_dtype=torch.float16,
-    #     local_files_only=True
-    # ).to(device)
+    unet = UNet2DConditionModel.from_pretrained(
+        os.path.join(checkpoint_dir, "unet"),
+        torch_dtype=torch.float16,
+        local_files_only=True
+    ).to(device)
 
-    # pipeline = DiffusionPipeline.from_pretrained(
-    #     MODEL_NAME,
-    #     unet=unet,
-    #     torch_dtype=torch.float16
-    # ).to(device)
-    
-    # ########## LORA ############
-    
-    checkpoint_dir = "./dreambooth_output/checkpoint-1200"
-    lora_weights_path = os.path.join(checkpoint_dir, "pytorch_lora_weights.safetensors")
-    
-    pipeline = StableDiffusionPipeline.from_pretrained(
+    pipeline = DiffusionPipeline.from_pretrained(
         MODEL_NAME,
+        unet=unet,
         torch_dtype=torch.float16
     ).to(device)
     
-    # LoRA 가중치 로드
-    pipeline.unet.load_attn_procs(lora_weights_path)
+    # ########## LORA ############
+    
+    # checkpoint_dir = "./dreambooth_output/checkpoint-700"
+    # lora_weights_path = os.path.join(checkpoint_dir, "pytorch_lora_weights.safetensors")
+    
+    # pipeline = StableDiffusionPipeline.from_pretrained(
+    #     MODEL_NAME,
+    #     torch_dtype=torch.float16
+    # ).to(device)
+    
+    # # LoRA 가중치 로드
+    # pipeline.unet.load_attn_procs(lora_weights_path)
     
     lora_path = "./J_illustration.safetensors"
     pipeline.load_lora_weights(lora_path)
