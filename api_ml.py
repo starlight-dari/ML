@@ -501,12 +501,12 @@ def generate_images():
     lora_path = "./J_illustration.safetensors"
     pipeline.load_lora_weights(lora_path)
 
-    max_guidance_scale = [10,11,12,13,14,15]  # 가장 큰 값 사용
+    max_guidance_scale = 10 # 가장 큰 값 사용
     inference_steps = 100  # 고정된 스텝 수
     generated_images = []
 
-    for scale in max_guidance_scale:
-        result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=scale)
+    for _ in range(6):
+        result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=max_guidance_scale)
         generated_images.append(result.images[0])
 
     # 최종 이미지 6장 선택
