@@ -404,8 +404,8 @@ def train_dreambooth():
             "--learning_rate=5e-6",
             "--lr_scheduler=constant",
             "--lr_warmup_steps=0",
-            "--max_train_steps=700",
-            "--checkpointing_steps=700",
+            "--max_train_steps=10",
+            "--checkpointing_steps=10",
             "--enable_xformers_memory_efficient_attention",
             "--use_8bit_adam",
         ]
@@ -482,7 +482,7 @@ def generate_images():
 
     print(dreambooth_prompt)
     
-    checkpoint_dir = "./dreambooth_output/checkpoint-700"
+    checkpoint_dir = "./dreambooth_output/checkpoint-10"
     
     unet = UNet2DConditionModel.from_pretrained(
         os.path.join(checkpoint_dir, "unet"),
@@ -532,9 +532,15 @@ def generate_images():
     # GPU 메모리 정리
     del pipeline
     del unet
-    torch.cuda.empty_cache()
-    gc.collect()
+    pipeline = None
+    unet = None
 
+    torch.cuda.empty_cache()
+    torch.cuda.synchronize()
+    gc.collect()
+    gc.collect()  # 추가 호출
+    torch.cuda.ipc_collect()
+    
     return jsonify({"images": encoded_images, "letter": letter})
 
 # @app.route('/letter_generate_random', methods=['POST'])
