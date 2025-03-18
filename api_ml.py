@@ -194,7 +194,7 @@ def upload_png_to_s3(bucket_name, object_name, pet_id, letter_id):
 
     try:
         # S3에 업로드할 키 경로 설정
-        s3_key = f"letters/pet_id:{pet_id}/letter_id:{letter_id}/{object_name}"
+        s3_key = f"letters/{pet_id}/{letter_id}/{object_name}"
 
         # 파일 업로드
         s3_client.upload_file(
@@ -404,8 +404,8 @@ def train_dreambooth():
             "--learning_rate=5e-6",
             "--lr_scheduler=constant",
             "--lr_warmup_steps=0",
-            "--max_train_steps=10",
-            "--checkpointing_steps=10",
+            "--max_train_steps=350",
+            "--checkpointing_steps=350",
             "--enable_xformers_memory_efficient_attention",
             "--use_8bit_adam",
         ]
@@ -460,6 +460,8 @@ def generate_images():
         texts = data.get("texts", [])
         pet_id = int(data.get("pet_id", 0))
         letter_id = int(data.get("letter_id", 0))
+        pet_name = data.get("pet_name", "")
+        member_name = data.get("member_name", "")
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid data format: {e}"}), 400
 
@@ -467,14 +469,14 @@ def generate_images():
 
     # GPT로 편지 생성
     try:
-        letter_prompt = "반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물이 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요."
+        letter_prompt = "반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물이 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인은 {member_name}의 호칭으로 불러주세요."
         letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
     except Exception as e:
         return jsonify({"error": f"Letter generation failed: {e}"}), 500
 
     # GPT로 DreamBooth 프롬프트 추출
     try:
-        prompt_extraction = "위 내용을 바탕으로 DreamBooth 모델에 적합한 프롬프트를 영어로 아주 짧게 생성하세요. 'a sks ...' 형식으로 시작해야 합니다."
+        prompt_extraction = f"위 내용을 바탕으로 DreamBooth 모델에 적합한 프롬프트를 영어로 아주 짧게 생성하세요. 생성 대상인 반려동물 종류는 {breed}이고 'a sks ...' 형식으로 시작해야 합니다."
         dreambooth_prompt = generate_letter_answer(memories, prompt_extraction, OPENAI_API_KEY)
         dreambooth_prompt = "high quality, J_illustration, " + dreambooth_prompt
     except Exception as e:
@@ -482,7 +484,7 @@ def generate_images():
 
     print(dreambooth_prompt)
     
-    checkpoint_dir = "./dreambooth_output/checkpoint-10"
+    checkpoint_dir = "./dreambooth_output/checkpoint-350"
     
     unet = UNet2DConditionModel.from_pretrained(
         os.path.join(checkpoint_dir, "unet"),
@@ -499,7 +501,7 @@ def generate_images():
     lora_path = "./J_illustration.safetensors"
     pipeline.load_lora_weights(lora_path)
 
-    max_guidance_scale = 10  # 가장 큰 값 사용
+    max_guidance_scale = 11  # 가장 큰 값 사용
     inference_steps = 100  # 고정된 스텝 수
     generated_images = []
 
