@@ -713,6 +713,7 @@ def generate_images_birth_death():
 
     return jsonify({"images": encoded_images, "letter": letter})
 
+
 ############################
 ######### api_stars ########
 ############################
