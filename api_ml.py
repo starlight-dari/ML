@@ -462,6 +462,7 @@ def generate_images():
         letter_id = int(data.get("letter_id", 0))
         pet_name = data.get("pet_name", "")
         member_name = data.get("member_name", "")
+        nickname = data.get("nickname", "")
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid data format: {e}"}), 400
 
@@ -469,7 +470,7 @@ def generate_images():
 
     # GPT로 편지 생성
     try:
-        letter_prompt = f"반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물이 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인은 {member_name}의 호칭으로 불러주세요."
+        letter_prompt = f"반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물이 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인의 이름은 {member_name}입니다. 주인은 {nickname}의 호칭으로 불러주세요."
         letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
     except Exception as e:
         return jsonify({"error": f"Letter generation failed: {e}"}), 500
@@ -505,7 +506,7 @@ def generate_images():
     inference_steps = 100  # 고정된 스텝 수
     generated_images = []
 
-    for _ in range(6):
+    for scale in max_guidance_scale:
         result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=max_guidance_scale)
         generated_images.append(result.images[0])
 
