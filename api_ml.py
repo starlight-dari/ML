@@ -183,7 +183,7 @@ def upload_svg_to_s3(bucket_name, object_name=None):
         print(f"파일 업로드 실패: {e}")
         return None
 
-def upload_png_to_s3(bucket_name, object_name, pet_id, letter_id):
+def upload_png_to_s3(bucket_name, object_name, pet_id):
     """
     .png 파일을 S3에 업로드하고 URL을 반환하는 함수
     :param file_path: 로컬 파일 경로
@@ -194,7 +194,7 @@ def upload_png_to_s3(bucket_name, object_name, pet_id, letter_id):
 
     try:
         # S3에 업로드할 키 경로 설정
-        s3_key = f"letters/{pet_id}/{letter_id}/{object_name}"
+        s3_key = f"letters/{pet_id}/{object_name}"
 
         # 파일 업로드
         s3_client.upload_file(
@@ -375,7 +375,7 @@ def generate_letter_answer(memories, prompt, openai_api_key):
         print(f"❌ 응답 생성 중 오류 발생: {e}")
         return "답변 생성에 실패했습니다."
 
-def generate_dreambooth(dreambooth_prompt, pet_id, letter_id):
+def generate_dreambooth(dreambooth_prompt, pet_id):
     checkpoint_dir = "./dreambooth_output/checkpoint-450"
     
     unet = UNet2DConditionModel.from_pretrained(
@@ -411,7 +411,7 @@ def generate_dreambooth(dreambooth_prompt, pet_id, letter_id):
         print(f"✅ Image saved locally: {local_path}")
 
         # S3 업로드
-        file_url = upload_png_to_s3(BUCKET_NAME, local_path, pet_id, letter_id)
+        file_url = upload_png_to_s3(BUCKET_NAME, local_path, pet_id)
 
         if file_url:
             encoded_images.append(file_url)
@@ -521,7 +521,6 @@ def generate_images():
         breed = data.get("breed", "")
         texts = data.get("texts", [])
         pet_id = int(data.get("pet_id", 0))
-        letter_id = int(data.get("letter_id", 0))
         pet_name = data.get("pet_name", "")
         member_name = data.get("member_name", "")
         nickname = data.get("nickname", "")
@@ -556,7 +555,7 @@ def generate_images():
     print("🎈 dreambooth_prompt :", dreambooth_prompt)
 
     try:
-        encoded_images = generate_dreambooth(dreambooth_prompt, pet_id, letter_id)
+        encoded_images = generate_dreambooth(dreambooth_prompt, pet_id)
     except Exception as e:
         return jsonify({"error": f"Dreambooth generation failed: {e}"}), 500
     
@@ -622,7 +621,6 @@ def generate_images_birth_death():
         breed = data.get("breed", "")
         texts = data.get("texts", []) # 생일, 사망일
         pet_id = int(data.get("pet_id", 0))
-        letter_id = int(data.get("letter_id", 0))
         pet_name = data.get("pet_name", "")
         member_name = data.get("member_name", "")
         nickname = data.get("nickname", "")
@@ -662,7 +660,7 @@ def generate_images_birth_death():
     print("🎈 dreambooth_prompt :", dreambooth_prompt)
 
     try:
-        encoded_images = generate_dreambooth(dreambooth_prompt, pet_id, letter_id)
+        encoded_images = generate_dreambooth(dreambooth_prompt, pet_id)
     except Exception as e:
         return jsonify({"error": f"Dreambooth generation failed: {e}"}), 500
     
