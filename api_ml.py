@@ -375,6 +375,68 @@ def generate_letter_answer(memories, prompt, openai_api_key):
         print(f"❌ 응답 생성 중 오류 발생: {e}")
         return "답변 생성에 실패했습니다."
 
+def generate_dreambooth(dreambooth_prompt, pet_id, letter_id):
+    checkpoint_dir = "./dreambooth_output/checkpoint-450"
+    
+    unet = UNet2DConditionModel.from_pretrained(
+        os.path.join(checkpoint_dir, "unet"),
+        torch_dtype=torch.float16,
+        local_files_only=True
+    ).to(device)
+
+    pipeline = DiffusionPipeline.from_pretrained(
+        MODEL_NAME,
+        unet=unet,
+        torch_dtype=torch.float16
+    ).to(device)
+    
+    lora_path = "./J_illustration.safetensors"
+    pipeline.load_lora_weights(lora_path)
+
+    max_guidance_scale = 13 # 가장 큰 값 사용
+    inference_steps = 100  # 고정된 스텝 수
+    generated_images = []
+
+    for _ in range(6):
+        result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=max_guidance_scale)
+        generated_images.append(result.images[0])
+
+    # 최종 이미지 6장 선택
+    encoded_images = []
+    for idx, image in enumerate(generated_images[:6]):
+        local_path = f"generated_image_{idx}.png"
+
+        # 이미지 저장
+        image.save(local_path, format="PNG")
+        print(f"✅ Image saved locally: {local_path}")
+
+        # S3 업로드
+        file_url = upload_png_to_s3(BUCKET_NAME, local_path, pet_id, letter_id)
+
+        if file_url:
+            encoded_images.append(file_url)
+            print(f"✅ Uploaded to S3: {file_url}")
+        else:
+            print(f"❌ Failed to upload {local_path} to S3")
+
+    # 불필요한 파일 삭제
+    shutil.rmtree("./dreambooth_output", ignore_errors=True)
+    shutil.rmtree("./train_images", ignore_errors=True)
+
+    # GPU 메모리 정리
+    del pipeline
+    del unet
+    pipeline = None
+    unet = None
+
+    torch.cuda.empty_cache()
+    torch.cuda.synchronize()
+    gc.collect()
+    gc.collect()  # 추가 호출
+    torch.cuda.ipc_collect()
+    
+    return encoded_images
+
 @app.route('/letter_train', methods=['POST'])
 def train_dreambooth():
     try:
@@ -404,8 +466,8 @@ def train_dreambooth():
             "--learning_rate=5e-6",
             "--lr_scheduler=constant",
             "--lr_warmup_steps=0",
-            "--max_train_steps=400",
-            "--checkpointing_steps=400",
+            "--max_train_steps=450",
+            "--checkpointing_steps=450",
             "--enable_xformers_memory_efficient_attention",
             "--use_8bit_adam",
         ]
@@ -470,10 +532,18 @@ def generate_images():
 
     # GPT로 편지 생성
     try:
-        letter_prompt = f"반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물이 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인의 이름은 {member_name}입니다. 주인은 {nickname}의 호칭으로 불러주세요."
+        letter_prompt = f"반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물이 사후 하늘나라에서 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인의 이름은 {member_name}입니다. 주인은 {nickname}의 호칭으로 불러주세요."
         letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
     except Exception as e:
         return jsonify({"error": f"Letter generation failed: {e}"}), 500
+    
+    try:
+        title_prompt = f"이 편지 내용의 제목을 10자 이내로 작성해주세요."
+        title = generate_letter_answer(letter, title_prompt, OPENAI_API_KEY)
+    except Exception as e:
+        return jsonify({"error": f"Letter generation failed: {e}"}), 500
+    
+    print("⭐ title: ", title)
 
     # GPT로 DreamBooth 프롬프트 추출
     try:
@@ -482,239 +552,121 @@ def generate_images():
         dreambooth_prompt = "high quality, J_illustration, " + dreambooth_prompt
     except Exception as e:
         return jsonify({"error": f"Prompt extraction failed: {e}"}), 500
-
-    print(dreambooth_prompt)
     
-    checkpoint_dir = "./dreambooth_output/checkpoint-400"
+    print("🎈 dreambooth_prompt :", dreambooth_prompt)
+
+    try:
+        encoded_images = generate_dreambooth(dreambooth_prompt, pet_id, letter_id)
+    except Exception as e:
+        return jsonify({"error": f"Dreambooth generation failed: {e}"}), 500
     
-    unet = UNet2DConditionModel.from_pretrained(
-        os.path.join(checkpoint_dir, "unet"),
-        torch_dtype=torch.float16,
-        local_files_only=True
-    ).to(device)
+    return jsonify({"images": encoded_images, "letter": letter, "title": title})
 
-    pipeline = DiffusionPipeline.from_pretrained(
-        MODEL_NAME,
-        unet=unet,
-        torch_dtype=torch.float16
-    ).to(device)
+@app.route('/letter_generate_random', methods=['POST'])
+def generate_images_random():
     
-    lora_path = "./J_illustration.safetensors"
-    pipeline.load_lora_weights(lora_path)
+    data = request.json
+    if not data:
+        return jsonify({"error": "Invalid JSON request"}), 400
 
-    max_guidance_scale = 13 # 가장 큰 값 사용
-    inference_steps = 100  # 고정된 스텝 수
-    generated_images = []
+    try:
+        character = data.get("character", "")
+        breed = data.get("breed", "")
+        pet_name = data.get("pet_name", "")
+        member_name = data.get("member_name", "")
+        nickname = data.get("nickname", "")
+    except (ValueError, TypeError) as e:
+        return jsonify({"error": f"Invalid data format: {e}"}), 400
 
-    for _ in range(6):
-        result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=max_guidance_scale)
-        generated_images.append(result.images[0])
+    memories = [character, breed]
 
-    # 최종 이미지 6장 선택
-    encoded_images = []
-    for idx, image in enumerate(generated_images[:6]):
-        local_path = f"generated_image_{idx}.png"
+    # GPT로 편지 생성
+    try:
+        letter_topics = [
+            "무지개 다리 건너에서의 나날들", "너와 함께했던 가장 행복한 순간", "처음 너를 만났을 때의 기억",
+            "내가 가장 좋아했던 음식과 간식", "내가 가장 좋아했던 장소", "우리만의 특별한 의식",
+            "네가 해준 최고의 보살핌", "내가 가끔 사고를 쳤을 때의 이야기", "너를 보며 느꼈던 따뜻한 감정",
+            "나를 처음 불렀을 때의 기억", "나를 처음 쓰다듬었을 때의 기분", "네가 나를 위해 해준 가장 특별한 일"
+        ]
+        letter_topic = random.choice(letter_topics)
+        memories = [character, breed] + [letter_topic]
 
-        # 이미지 저장
-        image.save(local_path, format="PNG")
-        print(f"✅ Image saved locally: {local_path}")
+        letter_prompt = f"반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 {letter_topic}을 주제로 반려동물이 사후 하늘나라에서 주인에게 쓰는 따뜻한 안부 인사 편지를 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인의 이름은 {member_name}입니다. 주인은 {nickname}의 호칭으로 불러주세요."
+        letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
+    except Exception as e:
+        return jsonify({"error": f"Letter generation failed: {e}"}), 500
+    
+    try:
+        title_prompt = f"이 편지 내용의 제목을 10자 이내로 작성해주세요."
+        title = generate_letter_answer(letter, title_prompt, OPENAI_API_KEY)
+    except Exception as e:
+        return jsonify({"error": f"Letter generation failed: {e}"}), 500
+    
+    print("⭐ title: ", title)
+    
+    return jsonify({"letter": letter, "title": title})
 
-        # S3 업로드
-        file_url = upload_png_to_s3(BUCKET_NAME, local_path, pet_id, letter_id)
-
-        if file_url:
-            encoded_images.append(file_url)
-            print(f"✅ Uploaded to S3: {file_url}")
-        else:
-            print(f"❌ Failed to upload {local_path} to S3")
-
-    # 불필요한 파일 삭제
-    shutil.rmtree("./dreambooth_output", ignore_errors=True)
-    shutil.rmtree("./train_images", ignore_errors=True)
-
-    # GPU 메모리 정리
-    del pipeline
-    del unet
+@app.route('/letter_generate_birth_death', methods=['POST'])
+def generate_images_birth_death():
+    # pipeline과 unet을 None으로 설정
+    global pipeline, unet
     pipeline = None
     unet = None
-
-    torch.cuda.empty_cache()
-    torch.cuda.synchronize()
-    gc.collect()
-    gc.collect()  # 추가 호출
-    torch.cuda.ipc_collect()
     
-    return jsonify({"images": encoded_images, "letter": letter})
+    data = request.json
+    if not data:
+        return jsonify({"error": "Invalid JSON request"}), 400
 
-# @app.route('/letter_generate_random', methods=['POST'])
-# def generate_images_random():
-#     try:
-#         data = request.json
-#         if not data:
-#             return jsonify({"error": "Invalid JSON request"}), 400
+    try:
+        character = data.get("character", "")
+        breed = data.get("breed", "")
+        texts = data.get("texts", []) # 생일, 사망일
+        pet_id = int(data.get("pet_id", 0))
+        letter_id = int(data.get("letter_id", 0))
+        pet_name = data.get("pet_name", "")
+        member_name = data.get("member_name", "")
+        nickname = data.get("nickname", "")
+    except (ValueError, TypeError) as e:
+        return jsonify({"error": f"Invalid data format: {e}"}), 400
 
-#         character = data.get("character", "")
-#         breed = data.get("breed", "")
-#         pet_id = int(data.get("pet_id", 0))
-#         letter_id = int(data.get("letter_id", 0))
+    memories = [character, breed] + texts
 
-#         letter_topics = [
-#             "무지개 다리 건너에서의 나날들", "너와 함께했던 가장 행복한 순간", "처음 너를 만났을 때의 기억",
-#             "내가 가장 좋아했던 음식과 간식", "내가 가장 좋아했던 장소", "우리만의 특별한 의식",
-#             "네가 해준 최고의 보살핌", "내가 가끔 사고를 쳤을 때의 이야기", "너를 보며 느꼈던 따뜻한 감정",
-#             "나를 처음 불렀을 때의 기억", "나를 처음 쓰다듬었을 때의 기분", "네가 나를 위해 해준 가장 특별한 일"
-#         ]
-#         letter_topic = random.choice(letter_topics)
-#         memories = [character, breed]
+    # GPT로 편지 생성
+    try:
+        letter_prompt = f"오늘은 특별한 날입니다. 반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물의 {texts}을 주제로 반려동물이 사후 하늘나라에서 주인에게 쓰는 따뜻한 안부 인사 편지를 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인의 이름은 {member_name}입니다. 주인은 {nickname}의 호칭으로 불러주세요."
+        letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
+    except Exception as e:
+        return jsonify({"error": f"Letter generation failed: {e}"}), 500
+    
+    try:
+        title_prompt = f"이 편지 내용의 제목을 10자 이내로 작성해주세요."
+        title = generate_letter_answer(letter, title_prompt, OPENAI_API_KEY)
+    except Exception as e:
+        return jsonify({"error": f"Letter generation failed: {e}"}), 500
+    
+    print("⭐ title: ", title)
 
-#         letter_prompt = f"반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 {letter_topic}을 주제로 반려동물이 주인에게 쓰는 따뜻한 안부 인사 편지를 반말로 작성해 주세요."
-#         letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
+    # GPT로 DreamBooth 프롬프트 추출
+    try:
+        if texts[0] == "생일":
+            prompt_extraction = f"위 내용을 바탕으로 DreamBooth 모델에 적합한 프롬프트를 영어로 아주 짧게 생성하세요. 생성 대상인 반려동물 종류는 {breed}이고 생일케이크 앞에서 행복해하는 반려동물의 모습을 생성하려고 합니다. 'a sks ...' 형식으로 시작해야 합니다."
+            dreambooth_prompt = generate_letter_answer(memories, prompt_extraction, OPENAI_API_KEY)
+            dreambooth_prompt = "high quality, J_illustration, " + dreambooth_prompt
+        elif texts[0]  == "기일":
+            prompt_extraction = f"위 내용을 바탕으로 DreamBooth 모델에 적합한 프롬프트를 영어로 아주 짧게 생성하세요. 생성 대상인 반려동물 종류는 {breed}이고 무지개와 별빛을 배경으로 반려동물이 행복하게 지내는 모습을 생성하려고 합니다. 'a sks ...' 형식으로 시작해야 합니다."
+            dreambooth_prompt = generate_letter_answer(memories, prompt_extraction, OPENAI_API_KEY)
+            dreambooth_prompt = "high quality, J_illustration, " + dreambooth_prompt
+    except Exception as e:
+        return jsonify({"error": f"Prompt extraction failed: {e}"}), 500
+    
+    print("🎈 dreambooth_prompt :", dreambooth_prompt)
 
-#         prompt_extraction = "위 내용을 바탕으로 DreamBooth 모델에 적합한 프롬프트를 영어로 아주 짧게 생성하세요. 'a sks ...' 형식으로 시작해야 합니다."
-#         dreambooth_prompt = generate_letter_answer(memories, prompt_extraction, OPENAI_API_KEY)
-#         dreambooth_prompt = "high quality, J_illustration, " + dreambooth_prompt
-
-#         print(dreambooth_prompt)
-
-#         checkpoint_dir = "./dreambooth_output/checkpoint-700"
-#         lora_weights_path = os.path.join(checkpoint_dir, "pytorch_lora_weights.safetensors")
-
-#         if not os.path.exists(lora_weights_path):
-#             return jsonify({"error": "LoRA weights not found"}), 500
-
-#         try:
-#             # 기본 Stable Diffusion 모델 로드
-#             pipeline = StableDiffusionPipeline.from_pretrained(
-#                 MODEL_NAME,
-#                 torch_dtype=torch.float16
-#             ).to(device)
-
-#             # LoRA 가중치 로드
-#             pipeline.unet.load_attn_procs(lora_weights_path)
-#         except Exception as e:
-#             return jsonify({"error": f"Failed to initialize diffusion pipeline: {e}"}), 500
-
-#         try:
-#             lora_path = "./J_illustration.safetensors"
-#             pipeline.load_lora_weights(lora_path)
-#         except Exception as e:
-#             return jsonify({"error": f"Failed to load LoRA weights: {e}"}), 500
-
-#         max_guidance_scale = 10  # 가장 큰 값 사용
-#         inference_steps = 100  # 고정된 스텝 수
-#         generated_images = []
-
-#         try:
-#             with torch.autocast(device.type):
-#                 result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=max_guidance_scale)
-#             generated_images.append(result.images[0])
-#         except torch.cuda.OutOfMemoryError:
-#             return jsonify({"error": "GPU out of memory during image generation"}), 500
-#         except Exception as e:
-#             return jsonify({"error": f"Image generation failed: {e}"}), 500
-
-#         encoded_images = []
-#         for idx, image in enumerate(generated_images[:6]):
-#             local_path = f"generated_image_{idx}.png"
-#             try:
-#                 image.save(local_path, format="PNG")
-#                 file_url = upload_png_to_s3(BUCKET_NAME, local_path, pet_id, letter_id)
-#                 if file_url:
-#                     encoded_images.append(file_url)
-#                 else:
-#                     return jsonify({"error": f"Failed to upload image {idx} to S3"}), 500
-#             except Exception as e:
-#                 return jsonify({"error": f"Failed to save or upload image {idx}: {e}"}), 500
-
-#         shutil.rmtree("./dreambooth_output", ignore_errors=True)
-#         shutil.rmtree("./train_images", ignore_errors=True)
-
-#         return jsonify({"images": encoded_images, "letter": letter})
-
-#     except Exception as e:
-#         return jsonify({"error": f"Unexpected error: {e}"}), 500
-
-# @app.route('/letter_generate_birth_death', methods=['POST'])
-# def generate_images_birth_death():
-#     try:
-#         data = request.json
-#         if not data:
-#             return jsonify({"error": "Invalid JSON request"}), 400
-
-#         character = data.get("character", "")
-#         texts = data.get("texts", [])
-#         breed = data.get("breed", "")
-#         pet_id = int(data.get("pet_id", 0))
-#         letter_id = int(data.get("letter_id", 0))
-        
-#         memories = [character, breed]
-
-#         letter_prompt = f"오늘은 특별한 날입니다. 반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 {texts}을 주제로 반려동물이 주인에게 쓰는 따뜻한 안부 인사 편지를 반말로 작성해 주세요."
-#         letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
-        
-#         prompt_extraction = "위 내용을 바탕으로 DreamBooth 모델에 적합한 프롬프트를 영어로 아주 짧게 생성하세요. 'a sks ...' 형식으로 시작해야 합니다."
-#         dreambooth_prompt = generate_letter_answer(memories, prompt_extraction, OPENAI_API_KEY)
-#         dreambooth_prompt = "high quality, J_illustration, " + dreambooth_prompt
-        
-#         print(dreambooth_prompt)
-
-#         checkpoint_dir = "./dreambooth_output/checkpoint-700"
-#         lora_weights_path = os.path.join(checkpoint_dir, "pytorch_lora_weights.safetensors")
-
-#         if not os.path.exists(lora_weights_path):
-#             return jsonify({"error": "LoRA weights not found"}), 500
-
-#         try:
-#             # 기본 Stable Diffusion 모델 로드
-#             pipeline = StableDiffusionPipeline.from_pretrained(
-#                 MODEL_NAME,
-#                 torch_dtype=torch.float16
-#             ).to(device)
-
-#             # LoRA 가중치 로드
-#             pipeline.unet.load_attn_procs(lora_weights_path)
-#         except Exception as e:
-#             return jsonify({"error": f"Failed to initialize diffusion pipeline: {e}"}), 500
-
-#         try:
-#             lora_path = "./J_illustration.safetensors"
-#             pipeline.load_lora_weights(lora_path)
-#         except Exception as e:
-#             return jsonify({"error": f"Failed to load LoRA weights: {e}"}), 500
-
-#         max_guidance_scale = 10  # 가장 큰 값 사용
-#         inference_steps = 100  # 고정된 스텝 수
-#         generated_images = []
-
-#         try:
-#             with torch.autocast(device.type):
-#                 result = pipeline(dreambooth_prompt, num_inference_steps=inference_steps, guidance_scale=max_guidance_scale)
-#             generated_images.append(result.images[0])
-#         except torch.cuda.OutOfMemoryError:
-#             return jsonify({"error": "GPU out of memory during image generation"}), 500
-#         except Exception as e:
-#             return jsonify({"error": f"Image generation failed: {e}"}), 500
-
-#         encoded_images = []
-#         for idx, image in enumerate(generated_images[:6]):
-#             local_path = f"{pet_id}/{letter_id}/generated_image_{idx}.png"
-#             try:
-#                 image.save(local_path, format="PNG")
-#                 file_url = upload_png_to_s3(BUCKET_NAME, local_path)
-#                 if file_url:
-#                     encoded_images.append(file_url)
-#                 else:
-#                     return jsonify({"error": f"Failed to upload image {idx} to S3"}), 500
-#             except Exception as e:
-#                 return jsonify({"error": f"Failed to save or upload image {idx}: {e}"}), 500
-
-#         shutil.rmtree("./dreambooth_output", ignore_errors=True)
-#         shutil.rmtree("./train_images", ignore_errors=True)
-
-#         return jsonify({"images": encoded_images, "letter": letter})
-
-#     except Exception as e:
-#         return jsonify({"error": f"Unexpected error: {e}"}), 500
+    try:
+        encoded_images = generate_dreambooth(dreambooth_prompt, pet_id, letter_id)
+    except Exception as e:
+        return jsonify({"error": f"Dreambooth generation failed: {e}"}), 500
+    
+    return jsonify({"images": encoded_images, "letter": letter, "title": title})
 
 ############################
 ######### api_stars ########
@@ -1001,54 +953,6 @@ def enhance_contrast(image):
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
     return enhanced
-
-# @app.route("/stars_run_pidinet", methods=["POST"])
-# def run_pidinet():
-#     """
-#     클라이언트로부터 이미지 리스트를 받아 PiDiNet 실행.
-#     """
-#     data = request.json
-#     print(f"📥 Received Data: {data}")  # Debugging log
-
-#     image_url = data.get("image_url")
-
-#     if not image_url:
-#         return jsonify({"error": "No images provided"}), 400
-
-#     # 단일 문자열이면 리스트로 변환
-#     if isinstance(image_url, str):
-#         image_url = [image_url]
-        
-#     stars_download_s3_images(image_urls = image_url, save_folder="./img")
-    
-#     # 🔹 Step 3: PiDiNet 실행 명령어
-#     command = [
-#         "python", "pidinet-master/main.py",
-#         "--model", "pidinet_converted",
-#         "--config", "carv4",
-#         "--sa", "--dil",
-#         "-j", "4",
-#         "--gpu", "0",
-#         "--resume",
-#         "--savedir", "./img_edges",
-#         "--datadir", "./img",
-#         "--dataset", "Custom",
-#         "--evaluate", "./table5_pidinet.pth",
-#         "--evaluate-converted"
-#     ]
-
-#     try:
-#         print("🚀 PiDiNet 실행 중...")
-#         result = subprocess.run(command, check=True)  # 실행 (완료될 때까지 대기)
-#         print("✅ PiDiNet 실행 완료!")
-
-#         return jsonify({
-#             "message": "PiDiNet execution completed",
-#         }), 200
-
-#     except subprocess.CalledProcessError as e:
-#         print(f"❌ PiDiNet 실행 실패: {e}")
-#         return jsonify({"error": "PiDiNet execution failed"}), 500
 
 @app.route("/stars_run_pidinet", methods=["POST"])
 def run_pidinet():
