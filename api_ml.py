@@ -36,6 +36,7 @@ from langchain_openai import ChatOpenAI
 # Diffusers & Segmentation Models
 from diffusers import DiffusionPipeline, UNet2DConditionModel
 from segment_anything import sam_model_registry, SamPredictor
+from ultralytics import YOLO, SAM
 
 # AWS
 from botocore.client import Config
@@ -74,16 +75,20 @@ funeral_data = load_json_data(FUNERAL_JSON_PATH)
 training_status = {"status": "idle"}
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Pidinet
-sam_checkpoint = "./sam_vit_b_01ec64.pth"  # SAM checkpoint 파일 경로
-# 모델 파일 경로 검증 (파일이 실제 존재하는지 확인)
-if not os.path.isfile(sam_checkpoint):
-    raise FileNotFoundError(f"Model checkpoint file '{sam_checkpoint}' not found.")
-model_type = "vit_b"
-state_dict = torch.load(sam_checkpoint, weights_only=True)
-sam = sam_model_registry[model_type](checkpoint=None)  # Load without unsafe data
-sam.load_state_dict(state_dict)
-predictor = SamPredictor(sam)
+# SAM
+
+# sam_checkpoint = "./sam_vit_b_01ec64.pth"  # SAM checkpoint 파일 경로
+# # 모델 파일 경로 검증 (파일이 실제 존재하는지 확인)
+# if not os.path.isfile(sam_checkpoint):
+#     raise FileNotFoundError(f"Model checkpoint file '{sam_checkpoint}' not found.")
+# model_type = "vit_b"
+# state_dict = torch.load(sam_checkpoint, weights_only=True)
+# sam = sam_model_registry[model_type](checkpoint=None)  # Load without unsafe data
+# sam.load_state_dict(state_dict)
+# predictor = SamPredictor(sam)
+
+yolo_model = YOLO("yolov8x.pt")
+sam_model = SAM("sam_b.pt")
 
 # Pinecone 초기화
 pc = Pinecone(api_key=PINECONE_API_KEY)
@@ -217,7 +222,6 @@ def upload_png_to_s3(bucket_name, object_name, pet_id):
     except Exception as e:
         print(f"파일 업로드 실패: {e}")
         return None
-
 
 ############################
 ######### api_rag ##########
@@ -835,22 +839,22 @@ def load_and_preprocess_image(image_path):
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     return image, image_rgb
 
-def run_sam_segmentation(image_rgb, predictor, point):
-    """SAM 모델을 이용해 마스크 예측 수행"""
-    predictor.set_image(image_rgb)
+# def run_sam_segmentation(image_rgb, predictor, point):
+#     """SAM 모델을 이용해 마스크 예측 수행"""
+#     predictor.set_image(image_rgb)
     
-    h, w, _ = image_rgb.shape
-    point = np.array([point])
-    input_label = np.array([1])  # 1: object
+#     h, w, _ = image_rgb.shape
+#     point = np.array([point])
+#     input_label = np.array([1])  # 1: object
 
-    masks, scores, _ = predictor.predict(
-        point_coords=point,
-        point_labels=input_label,
-        multimask_output=True,
-    )
+#     masks, scores, _ = predictor.predict(
+#         point_coords=point,
+#         point_labels=input_label,
+#         multimask_output=True,
+#     )
 
-    best_mask_index = int(np.argmax(scores))
-    return masks[best_mask_index]
+#     best_mask_index = int(np.argmax(scores))
+#     return masks[best_mask_index]
 
 def extract_and_sort_centroids(contour_points, n_clusters, n_points):
     """
@@ -1012,8 +1016,32 @@ def process_image():
         image_name = os.path.basename(image_url)
         image_path = "./img/" + image_name
         
+        # /////////////////////////////////////////////
+        
+        results = yolo_model(image_path)
+        boxes = results[0].boxes.xyxy.cpu().numpy()
+        
+        x = point[0]
+        y = point[1]
+        
+        selected_box = None
+        for box in boxes:
+            x1, y1, x2, y2 = box
+            if x1 <= x <= x2 and y1 <= y <= y2:
+                selected_box = box
+                break
+            
+        if selected_box is not None:
+            sam_results = sam_model(image_path, bboxes=[selected_box])
+            mask = sam_results[0].masks.data[0].cpu().numpy()
+        else:
+            print("점에 해당하는 객체를 찾지 못했습니다.")
+
+        
+        # /////////////////////////////////////////////
+        
         image, image_rgb = load_and_preprocess_image(image_path)
-        mask = run_sam_segmentation(image_rgb, predictor, point)
+        # mask = run_sam_segmentation(image_rgb, predictor, point)
 
         mask_ratio = np.count_nonzero(mask) / mask.size
         max_internal_points = int(mask_ratio * 3000)
