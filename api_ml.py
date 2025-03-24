@@ -40,6 +40,8 @@ from segment_anything import sam_model_registry, SamPredictor
 # AWS
 from botocore.client import Config
 
+import datetime
+
 # .env 파일 로드
 load_dotenv()
 
@@ -186,15 +188,18 @@ def upload_svg_to_s3(bucket_name, object_name=None):
 def upload_png_to_s3(bucket_name, object_name, pet_id):
     """
     .png 파일을 S3에 업로드하고 URL을 반환하는 함수
-    :param file_path: 로컬 파일 경로
     :param bucket_name: S3 버킷 이름
-    :param object_name: S3에 저장할 파일 이름 (기본적으로 로컬 파일 이름과 동일)
+    :param object_name: S3에 저장할 파일 이름
+    :param pet_id: 반려동물 ID
     :return: 업로드된 파일의 S3 URL
     """
-
     try:
-        # S3에 업로드할 키 경로 설정
-        s3_key = f"letters/{pet_id}/{object_name}"
+        # 현재 날짜 가져오기 (YYYYMMDD 형식)
+        current_date = datetime.datetime.now().strftime("%Y%m%d")
+
+        # S3에 업로드할 키 경로 설정 (파일명 뒤에 날짜 추가)
+        object_name_with_date = f"{object_name}_{current_date}.png"
+        s3_key = f"letters/{pet_id}/{object_name_with_date}"
 
         # 파일 업로드
         s3_client.upload_file(
