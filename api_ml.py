@@ -201,8 +201,8 @@ def upload_png_to_s3(bucket_name, object_name, pet_id):
     """
     try:
         # 현재 날짜 가져오기 (YYYYMMDD 형식)
-        current_date = datetime.datetime.now().strftime("%Y%m%d")
-
+        current_date = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        
         # S3에 업로드할 키 경로 설정 (파일명 뒤에 날짜 추가)
         object_name_with_date = f"{object_name}_{current_date}.png"
         s3_key = f"letters/{pet_id}/{object_name_with_date}"
@@ -552,7 +552,7 @@ def generate_images():
 
     # GPT로 편지 생성
     try:
-        letter_prompt = f"반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물이 사후 하늘나라에서 주인에게 쓰는 따뜻한 편지를 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인의 이름은 {member_name}입니다. 주인은 {nickname}의 호칭으로 불러주세요."
+        letter_prompt = f"반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물이 사후 하늘나라에서 주인에게 쓰는 편지를 작성해 주세요. 따뜻하고 감성적인 느낌으로 작성해주세요. 말투는 반말로 해주세요. 반려동물의 이름은 {pet_name}입니다. 주인은 {nickname}의 호칭으로 불러주세요."
         letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
     except Exception as e:
         return jsonify({"error": f"Letter generation failed: {e}"}), 500
@@ -562,6 +562,8 @@ def generate_images():
         title = generate_letter_answer(letter, title_prompt, OPENAI_API_KEY)
     except Exception as e:
         return jsonify({"error": f"Letter generation failed: {e}"}), 500
+    
+    title = "💌 " + title
     
     print("⭐ title: ", title)
 
@@ -611,7 +613,7 @@ def generate_images_random():
         letter_topic = random.choice(letter_topics)
         memories = [character, breed] + [letter_topic]
 
-        letter_prompt = f"반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 {letter_topic}을 주제로 반려동물이 사후 하늘나라에서 주인에게 쓰는 따뜻한 안부 인사 편지를 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인의 이름은 {member_name}입니다. 주인은 {nickname}의 호칭으로 불러주세요."
+        letter_prompt = f"반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 {letter_topic}을 주제로 반려동물이 사후 하늘나라에서 주인에게 쓰는 안부 인사 편지를 작성해 주세요. 따뜻하고 감성적은 문체로 작성해 주주세요. 말투는 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}입니다. 주인은 {nickname}의 호칭으로 불러주세요."
         letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
     except Exception as e:
         return jsonify({"error": f"Letter generation failed: {e}"}), 500
@@ -621,6 +623,8 @@ def generate_images_random():
         title = generate_letter_answer(letter, title_prompt, OPENAI_API_KEY)
     except Exception as e:
         return jsonify({"error": f"Letter generation failed: {e}"}), 500
+    
+    title = "💌 " + title
     
     print("⭐ title: ", title)
     
@@ -652,7 +656,7 @@ def generate_images_birth_death():
 
     # GPT로 편지 생성
     try:
-        letter_prompt = f"오늘은 특별한 날입니다. 반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물의 {texts}을 주제로 반려동물이 사후 하늘나라에서 주인에게 쓰는 따뜻한 안부 인사 편지를 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인의 이름은 {member_name}입니다. 주인은 {nickname}의 호칭으로 불러주세요."
+        letter_prompt = f"오늘은 특별한 날입니다. 반려동물의 성격과 종, 반려동물과의 추억을 기록한 게시글을 바탕으로 반려동물의 {texts[0]}을 주제로 반려동물이 사후 하늘나라에서 주인에게 쓰는 안부 인사 편지를 작성해 주세요. 문체는 따뜻하고 감성적인 느낌으로 작성해 주세요. 말투는 반말로 작성해 주세요. 반려동물의 이름은 {pet_name}이고 주인의 이름은 {member_name}입니다. 주인은 {nickname}의 호칭으로 불러주세요."
         letter = generate_letter_answer(memories, letter_prompt, OPENAI_API_KEY)
     except Exception as e:
         return jsonify({"error": f"Letter generation failed: {e}"}), 500
@@ -663,7 +667,10 @@ def generate_images_birth_death():
     except Exception as e:
         return jsonify({"error": f"Letter generation failed: {e}"}), 500
     
-    print("⭐ title: ", title)
+    if texts[0] == "생일":
+        title = "🎂" + title
+    elif texts[0] == "기일":    
+        title = "🪦" + title
 
     # GPT로 DreamBooth 프롬프트 추출
     try:
@@ -1032,17 +1039,21 @@ def process_image():
         
         results = yolo_model(image_path, imgsz=512)
         boxes = results[0].boxes.xyxy.cpu().numpy()
-        
+
         x = point[0]
         y = point[1]
-        
+
         selected_box = None
+        min_area = float("inf")
+
         for box in boxes:
             x1, y1, x2, y2 = box
             if x1 <= x <= x2 and y1 <= y <= y2:
-                selected_box = box
-                break
-            
+                area = (x2 - x1) * (y2 - y1)
+                if area < min_area:
+                    min_area = area
+                    selected_box = box
+     
         if selected_box is not None:
             sam_results = sam_model(image_path, bboxes=[selected_box])
             mask = sam_results[0].masks.data[0].cpu().numpy()
