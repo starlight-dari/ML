@@ -1044,11 +1044,11 @@ def process_image():
             return jsonify({"error": "No image URL provided"}), 400
         
         image_name = os.path.basename(image_url)
-        # image_path = "./img/" + image_name
+        image_path = "./img/" + image_name
         
         # # /////////////////////////////////////////////
         
-        # img = cv2.imread(image_path)
+        img = cv2.imread(image_path)
         
         response = requests.get(image_url)
         img_array = np.asarray(bytearray(response.content), dtype=np.uint8)
