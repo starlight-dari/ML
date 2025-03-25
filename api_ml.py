@@ -393,7 +393,7 @@ def is_black_image(image, threshold=10):
     return avg_brightness < threshold  # 밝기 평균이 threshold보다 작으면 검정으로 판단
 
 def generate_dreambooth(dreambooth_prompt, pet_id):
-    checkpoint_dir = "./dreambooth_output/checkpoint-550"
+    checkpoint_dir = "./dreambooth_output/checkpoint-30"
     
     unet = UNet2DConditionModel.from_pretrained(
         os.path.join(checkpoint_dir, "unet"),
@@ -487,8 +487,8 @@ def train_dreambooth():
             "--learning_rate=5e-6",
             "--lr_scheduler=constant",
             "--lr_warmup_steps=0",
-            "--max_train_steps=550",
-            "--checkpointing_steps=550",
+            "--max_train_steps=30",
+            "--checkpointing_steps=30",
             "--enable_xformers_memory_efficient_attention",
             "--use_8bit_adam",
         ]
@@ -1030,7 +1030,7 @@ def process_image():
         
         # /////////////////////////////////////////////
         
-        results = yolo_model(image_path)
+        results = yolo_model(image_path, imgsz=512)
         boxes = results[0].boxes.xyxy.cpu().numpy()
         
         x = point[0]
