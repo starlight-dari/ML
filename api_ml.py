@@ -42,6 +42,7 @@ from ultralytics import YOLO, SAM
 from botocore.client import Config
 
 import datetime
+from PIL import ImageStat
 
 # .env 파일 로드
 load_dotenv()
@@ -384,8 +385,15 @@ def generate_letter_answer(memories, prompt, openai_api_key):
         print(f"❌ 응답 생성 중 오류 발생: {e}")
         return "답변 생성에 실패했습니다."
 
+def is_black_image(image, threshold=10):
+    """이미지가 거의 검정인지 확인하는 함수"""
+    grayscale = image.convert("L")  # 흑백으로 변환
+    stat = ImageStat.Stat(grayscale)
+    avg_brightness = stat.mean[0]
+    return avg_brightness < threshold  # 밝기 평균이 threshold보다 작으면 검정으로 판단
+
 def generate_dreambooth(dreambooth_prompt, pet_id):
-    checkpoint_dir = "./dreambooth_output/checkpoint-450"
+    checkpoint_dir = "./dreambooth_output/checkpoint-550"
     
     unet = UNet2DConditionModel.from_pretrained(
         os.path.join(checkpoint_dir, "unet"),
@@ -413,6 +421,10 @@ def generate_dreambooth(dreambooth_prompt, pet_id):
     # 최종 이미지 6장 선택
     encoded_images = []
     for idx, image in enumerate(generated_images[:6]):
+        if is_black_image(image):
+            print(f"⚠️ Skipped black image at index {idx}")
+            continue
+
         local_path = f"generated_image_{idx}.png"
 
         # 이미지 저장
@@ -475,8 +487,8 @@ def train_dreambooth():
             "--learning_rate=5e-6",
             "--lr_scheduler=constant",
             "--lr_warmup_steps=0",
-            "--max_train_steps=450",
-            "--checkpointing_steps=450",
+            "--max_train_steps=550",
+            "--checkpointing_steps=550",
             "--enable_xformers_memory_efficient_attention",
             "--use_8bit_adam",
         ]
