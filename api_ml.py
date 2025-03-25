@@ -980,6 +980,17 @@ def enhance_contrast(image):
     enhanced = clahe.apply(gray)
     return enhanced
 
+def enhance_contrast_rgb(image):
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    cl = clahe.apply(l)
+
+    enhanced_lab = cv2.merge((cl, a, b))
+    enhanced_img = cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2BGR)
+    return enhanced_img
+
 @app.route("/stars_run_pidinet", methods=["POST"])
 def run_pidinet():
     try:
@@ -1037,7 +1048,10 @@ def process_image():
         
         # /////////////////////////////////////////////
         
-        results = yolo_model(image_path, imgsz=512)
+        img = cv2.imread(image_path)
+        enhanced_img = enhance_contrast_rgb(img)
+        
+        results = yolo_model(enhanced_img, imgsz=512)
         boxes = results[0].boxes.xyxy.cpu().numpy()
 
         x = point[0]
