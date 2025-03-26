@@ -242,19 +242,25 @@ def get_embedding(text):
         print(f"임베딩 생성 오류: {e}")
         return None
 
-def search_index(index, query, top_k=3):
-    """주어진 Pinecone 인덱스에서 유사 문서 검색"""
+def search_index(index, query, top_k=3, score_threshold=0.45):
+    """주어진 Pinecone 인덱스에서 유사 문서 검색 (유사도 필터링 추가)"""
     query_embedding = get_embedding(query)
     if not query_embedding:
         return []
     
-    result = index.query(vector=query_embedding, top_k=top_k, include_metadata=True)
+    result = index.query(vector=query_embedding, top_k=top_k, include_metadata=True, include_values=False)
     matches = result.get("matches", []) if isinstance(result, dict) else result.matches
 
-    return [
+    # 유사도 필터링 추가
+    filtered_chunks = [
         match["metadata"]["chunk_text"]
-        for match in matches if "metadata" in match and "chunk_text" in match["metadata"]
+        for match in matches
+        if "metadata" in match and "chunk_text" in match["metadata"]
+        and match.get("score", 0) >= score_threshold
     ]
+
+    return filtered_chunks
+
 
 def generate_answer(query, relevant_texts, prompt_template):
     """LangChain을 사용해 문맥 기반 답변 생성"""
@@ -296,6 +302,9 @@ def get_answer():
             samsung_texts = search_index(index_samsung, query, top_k=3)
             hanhwa_texts = search_index(index_hanhwa, query, top_k=3)
             
+            if not any([meritz_texts, samsung_texts, hanhwa_texts]):
+                return jsonify({"answer": "저는 보험 관련 내용만 답변해드릴 수 있습니다."})
+            
             relevant_texts = (
                 ["[메리츠]\n" + "\n".join(meritz_texts)] +
                 ["[삼성화재]\n" + "\n".join(samsung_texts)] +
@@ -311,6 +320,10 @@ def get_answer():
         
         elif route_num == 1:
             diagnostic_texts = search_index(index_diagnostic, query, top_k=7)
+            
+            if not diagnostic_texts:
+                return jsonify({"answer": "저는 노령견 관련 정보만 답변해드릴 수 있습니다."})
+            
             relevant_texts = diagnostic_texts
 
             prompt_template = (
