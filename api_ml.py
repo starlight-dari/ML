@@ -377,9 +377,11 @@ def get_answer():
             print("GPT 기반 추출된 키워드 query:", pc_query)
             
             
-            diagnostic_texts = search_index(index_diagnostic, pc_query, top_k=7)
+            diagnostic_texts = search_index(index_diagnostic, pc_query, top_k=7, score_threshold=0.7)
             
-            if not len(diagnostic_texts) == 0:
+            print(len(diagnostic_texts))
+            
+            if len(diagnostic_texts) == 0:
                 return jsonify({"answer": "죄송합니다. 더 자세한 반려동물의 건강 상태나 질병을 입력해주세요"})
             
             relevant_texts = diagnostic_texts
