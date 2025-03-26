@@ -242,7 +242,7 @@ def get_embedding(text):
         print(f"임베딩 생성 오류: {e}")
         return None
 
-def search_index(index, query, top_k=3, score_threshold=0.45):
+def search_index(index, query, top_k=3, score_threshold=0.8):
     """주어진 Pinecone 인덱스에서 유사 문서 검색 (유사도 필터링 추가)"""
     query_embedding = get_embedding(query)
     if not query_embedding:
@@ -302,8 +302,17 @@ def get_answer():
             samsung_texts = search_index(index_samsung, query, top_k=3)
             hanhwa_texts = search_index(index_hanhwa, query, top_k=3)
             
+            # print(len(meritz_texts), len(samsung_texts), len(hanhwa_texts))
+            
             if not any([meritz_texts, samsung_texts, hanhwa_texts]):
-                return jsonify({"answer": "저는 보험 관련 내용만 답변해드릴 수 있습니다."})
+                return jsonify({"answer": "죄송합니다. 저는 보험 관련 내용만 답변해드릴 수 있습니다."})
+            
+            if len(meritz_texts) == 0:
+                meritz_texts = "관련 문건 정보 없음"
+            if len(samsung_texts) == 0:
+                samsung_texts = "관련 문건 정보 없음"
+            if len(hanhwa_texts) == 0:
+                hanhwa_texts = "관련 문건 정보 없음"
             
             relevant_texts = (
                 ["[메리츠]\n" + "\n".join(meritz_texts)] +
@@ -312,7 +321,9 @@ def get_answer():
             )
 
             prompt_template = (
-                "당신은 보험 추천 도우미입니다. 아래의 문맥을 참고하여 3개 보험사를 비교하여 질문에 정확하고 이해하기 쉬운 답변을 300자 이내의 완결된 문장으로 답변해주세요.\n"
+                "당신은 보험 추천 도우미입니다. 아래의 문맥을 참고하여 3개 보험사를 비교하여 \
+                질문에 정확하고 이해하기 쉬운 답변을 300자 이내의 완결된 문장으로 답변해주세요.\
+                문맥이 보험 추천과 무관하다면 '죄송합니다. 저는 보험 관련 정보만 답변해드릴 수 있습니다.'로 답변해주세요.\n"
                 "문맥: {context}\n\n"
                 "질문: {question}\n"
                 "답변:"
@@ -322,12 +333,14 @@ def get_answer():
             diagnostic_texts = search_index(index_diagnostic, query, top_k=7)
             
             if not diagnostic_texts:
-                return jsonify({"answer": "저는 노령견 관련 정보만 답변해드릴 수 있습니다."})
+                return jsonify({"answer": "죄송합니다. 저는 노령견 관련 정보만 답변해드릴 수 있습니다."})
             
             relevant_texts = diagnostic_texts
 
             prompt_template = (
-                "당신은 노령견 전문 정보 제공 도우미입니다. 아래의 문맥을 참고하여 질문에 정확하고 이해하기 쉬운 답변을 300자 이내의 완결된 문장으로 답변해주세요.\n"
+                "당신은 노령견 전문 정보 제공 도우미입니다. 아래의 문맥을 참고하여 \
+                질문에 정확하고 이해하기 쉬운 답변을 300자 이내의 완결된 문장으로 답변해주세요.\
+                문맥이 노령견 정보와 무관하다면 '죄송합니다. 저는 보험 관련 정보만 답변해드릴 수 있습니다.'로 답변해주세요.\n"
                 "문맥: {context}\n\n"
                 "질문: {question}\n"
                 "답변:"
@@ -338,7 +351,9 @@ def get_answer():
 
             prompt_template = (
                 "당신은 장례식장 관련 정보를 제공하는 전문가입니다. "
-                "아래의 문맥을 참고하여 사용자가 원하는 서비스를 파악한 후 가장 적합한 장례식장을 문맥에서 찾아 300자 이내의 완결된 문장으로 답변해 안내해주세요.\n"
+                "아래의 문맥을 참고하여 사용자가 원하는 서비스를 파악한 후 \
+                가장 적합한 장례식장을 문맥에서 찾아 300자 이내의 완결된 문장으로 답변해 안내해주세요.\
+                \n 문맥이 장례식장과 무관하다면 '죄송합니다. 저는 장례식장 관련 정보만 답변해드릴 수 있습니다.'로 답변해주세요.\n"
                 "문맥: {context}\n\n"
                 "질문: {question}\n"
                 "답변:"
