@@ -296,16 +296,38 @@ def get_answer():
         
         if route_num is None or query is None:
             return jsonify({"error": "route_num과 query가 필요합니다."}), 400
+        
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        # GPT에 키워드 추출 요청
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "당신은 사용자의 문장에서 핵심 키워드를 뽑는 전문가입니다. \
+                    사용자 질문에 대해 vector DB에서 적절한 유관 보험 문서를 찾으려고 합니다.\
+                    반려동물 보험 문건 검색에 필요한 키워드를 반려동물의 건강 상태, 기존 질병 여부, 희망 보장 범위를 위주로 3개만 추출해주세요."},
+                {"role": "user", "content": f"다음 문장에서 핵심 키워드만 콤마(,)로 구분해서 추출해줘:\n\"{query}\""},
+            ],
+            temperature=0.3,
+        )
+        # 응답에서 키워드 추출
+        keywords = response.choices[0].message.content.strip()
+        # query 재정의
+        pc_query = keywords.replace(" ", "")  # 필요에 따라 공백 제거
+        print("GPT 기반 추출된 키워드 query:", pc_query)
 
         if route_num == 0:
-            meritz_texts = search_index(index_meritz, query, top_k=3)
-            samsung_texts = search_index(index_samsung, query, top_k=3)
-            hanhwa_texts = search_index(index_hanhwa, query, top_k=3)
+            meritz_texts = search_index(index_meritz, pc_query, top_k=4)
+            samsung_texts = search_index(index_samsung, pc_query, top_k=4)
+            hanhwa_texts = search_index(index_hanhwa, pc_query, top_k=4)
             
-            # print(len(meritz_texts), len(samsung_texts), len(hanhwa_texts))
+            print(len(meritz_texts), len(samsung_texts), len(hanhwa_texts))
             
-            if not any([meritz_texts, samsung_texts, hanhwa_texts]):
-                return jsonify({"answer": "죄송합니다. 저는 보험 관련 내용만 답변해드릴 수 있습니다."})
+            # print("메리츠")
+            # print(meritz_texts)
+            # print("삼성")
+            # print(samsung_texts)
+            # print("한화")
+            # print(hanhwa_texts)
             
             if len(meritz_texts) == 0:
                 meritz_texts = "관련 문건 정보 없음"
@@ -313,6 +335,9 @@ def get_answer():
                 samsung_texts = "관련 문건 정보 없음"
             if len(hanhwa_texts) == 0:
                 hanhwa_texts = "관련 문건 정보 없음"
+                
+            if (len(meritz_texts) == 0) and (len(samsung_texts) == 0) and (len(hanhwa_texts) == 0):
+                return jsonify({"answer" : '죄송합니다. 더 자세한 반려동물의 반려동물의 건강 상태, 기존 질병 여부, 희망 보장 범위을 입력해주세요'})
             
             relevant_texts = (
                 ["[메리츠]\n" + "\n".join(meritz_texts)] +
@@ -321,26 +346,50 @@ def get_answer():
             )
 
             prompt_template = (
-                "당신은 보험 추천 도우미입니다. 아래의 문맥을 참고하여 3개 보험사를 비교하여 \
+                "당신은 보험 추천 도우미입니다. \
+                질문에서 반려동물의 현재 상태를 질문에서 파악해\
+                아래의 문맥을 참고하여 3개 보험사를 비교하여 \
                 질문에 정확하고 이해하기 쉬운 답변을 300자 이내의 완결된 문장으로 답변해주세요.\
-                문맥이 보험 추천과 무관하다면 '죄송합니다. 저는 보험 관련 정보만 답변해드릴 수 있습니다.'로 답변해주세요.\n"
+                \n"
                 "문맥: {context}\n\n"
                 "질문: {question}\n"
                 "답변:"
             )
         
         elif route_num == 1:
-            diagnostic_texts = search_index(index_diagnostic, query, top_k=7)
             
-            if not diagnostic_texts:
-                return jsonify({"answer": "죄송합니다. 저는 노령견 관련 정보만 답변해드릴 수 있습니다."})
+            client = openai.OpenAI(api_key=OPENAI_API_KEY)
+            # GPT에 키워드 추출 요청
+            response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "당신은 사용자의 문장에서 핵심 키워드를 뽑는 전문가입니다. \
+                        사용자 질문에 대해 vector DB에서 적절한 유관 노령견/묘 전문 문서를 찾으려고 합니다.\
+                        노령견/묘 건강관리 전문 정보 문건 검색에 필요한 키워드를 반려동물의 건강 상태와 질병을 위주로 2개만 추출해주세요."},
+                    {"role": "user", "content": f"다음 문장에서 핵심 키워드만 콤마(,)로 구분해서 추출해줘:\n\"{query}\""},
+                ],
+                temperature=0.3,
+            )
+            # 응답에서 키워드 추출
+            keywords = response.choices[0].message.content.strip()
+            # query 재정의
+            pc_query = keywords.replace(" ", "")  # 필요에 따라 공백 제거
+            print("GPT 기반 추출된 키워드 query:", pc_query)
+            
+            
+            diagnostic_texts = search_index(index_diagnostic, pc_query, top_k=7)
+            
+            if not len(diagnostic_texts) == 0:
+                return jsonify({"answer": "죄송합니다. 더 자세한 반려동물의 건강 상태나 질병을 입력해주세요"})
             
             relevant_texts = diagnostic_texts
 
             prompt_template = (
-                "당신은 노령견 전문 정보 제공 도우미입니다. 아래의 문맥을 참고하여 \
-                질문에 정확하고 이해하기 쉬운 답변을 300자 이내의 완결된 문장으로 답변해주세요.\
-                문맥이 노령견 정보와 무관하다면 '죄송합니다. 저는 보험 관련 정보만 답변해드릴 수 있습니다.'로 답변해주세요.\n"
+                "당신은 노령견/묘 전문 정보 제공 도우미입니다. \
+                반려동물의 현재 상태를 질문에서 파악해\
+                아래의 문맥을 참고하여 \
+                질문에 정확하고 이해하기 쉬운 답변을 300자 이내의 완결된 문장으로 답변해주세요.\ \
+                \n"
                 "문맥: {context}\n\n"
                 "질문: {question}\n"
                 "답변:"
@@ -353,7 +402,9 @@ def get_answer():
                 "당신은 장례식장 관련 정보를 제공하는 전문가입니다. "
                 "아래의 문맥을 참고하여 사용자가 원하는 서비스를 파악한 후 \
                 가장 적합한 장례식장을 문맥에서 찾아 300자 이내의 완결된 문장으로 답변해 안내해주세요.\
-                \n 문맥이 장례식장과 무관하다면 '죄송합니다. 저는 장례식장 관련 정보만 답변해드릴 수 있습니다.'로 답변해주세요.\n"
+                질문이 장례식장과 무관하다면 '죄송합니다. 저는 장례식장 관련 정보만 답변해드릴 수 있습니다.'로 답변해주세요.\
+                질문 내용에 거주지역 or 원하는 장례식장 서비스가 언급되어 있지 않다면 \
+                '죄송합니다. 더 자세한 거주 지역과 원하는 장례식장 서비스를 입력해주세요'로 답변헤주세요.\n"
                 "문맥: {context}\n\n"
                 "질문: {question}\n"
                 "답변:"
