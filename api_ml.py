@@ -242,7 +242,7 @@ def get_embedding(text):
         print(f"임베딩 생성 오류: {e}")
         return None
 
-def search_index(index, query, top_k=3, score_threshold=0.8):
+def search_index(index, query, top_k=3, score_threshold=0.85):
     """주어진 Pinecone 인덱스에서 유사 문서 검색 (유사도 필터링 추가)"""
     query_embedding = get_embedding(query)
     if not query_embedding:
