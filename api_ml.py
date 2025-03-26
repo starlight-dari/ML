@@ -242,7 +242,7 @@ def get_embedding(text):
         print(f"임베딩 생성 오류: {e}")
         return None
 
-def search_index(index, query, top_k=3, score_threshold=0.85):
+def search_index(index, query, top_k=3, score_threshold=0.825):
     """주어진 Pinecone 인덱스에서 유사 문서 검색 (유사도 필터링 추가)"""
     query_embedding = get_embedding(query)
     if not query_embedding:
@@ -329,15 +329,17 @@ def get_answer():
             # print("한화")
             # print(hanhwa_texts)
             
+            if (len(meritz_texts) < 2) or (len(samsung_texts) < 2) or (len(hanhwa_texts) < 2):
+                return jsonify({
+                    "answer": "죄송합니다. 더 정확한 추천을 위해 반려동물의 건강 상태, 기존 질병 유무, 희망하는 보장 범위를 입력해 주세요."
+                })
+            
             if len(meritz_texts) == 0:
                 meritz_texts = "관련 문건 정보 없음"
             if len(samsung_texts) == 0:
                 samsung_texts = "관련 문건 정보 없음"
             if len(hanhwa_texts) == 0:
                 hanhwa_texts = "관련 문건 정보 없음"
-                
-            if (len(meritz_texts) == 0) and (len(samsung_texts) == 0) and (len(hanhwa_texts) == 0):
-                return jsonify({"answer" : '죄송합니다. 더 자세한 반려동물의 반려동물의 건강 상태, 기존 질병 여부, 희망 보장 범위을 입력해주세요'})
             
             relevant_texts = (
                 ["[메리츠]\n" + "\n".join(meritz_texts)] +
