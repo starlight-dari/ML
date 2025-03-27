@@ -426,8 +426,8 @@ def get_answer():
         
         elif route_num == 3:
             answer = """다음은 펫로스 증후군 극복 프로그램 링크 목록입니다.\n
-<a href="https://center.mindcafe.co.kr/program_petloss" style="color:#ADC3F3;">마인드카페 센터_바로가기</a>\n
-<a href="https://www.gangnam.go.kr/contents/mind_healing/1/view.do?mid=ID04_04075401" style="color:#ADC3F3;">마음치유모임 with 펫로스_바로가기</a>"""
+[마인드카페 센터_바로가기](https://center.mindcafe.co.kr/program_petloss)\n
+[마음치유모임 with 펫로스_바로가기](https://www.gangnam.go.kr/contents/mind_healing/1/view.do?mid=ID04_04075401)"""
             return jsonify({"answer": answer})
         # 
         else:
